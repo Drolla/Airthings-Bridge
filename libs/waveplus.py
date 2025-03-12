@@ -133,8 +133,8 @@ class _WavePlusControl():
     _FORMAT = '<BBL12B6H'
     _KEYS = ("illuminance", "battery")  # Not implemented: measurement_periods
     _CMD = struct.pack('<B', 0x6d)
-    _VBAT_MAX = 3.2
-    _VBAT_MIN = 2.2
+    _VBAT_MAX = 2.4
+    _VBAT_MIN = 2.1
     _CACHE_TTL = 3600
     _CACHE_MAX_READS = 100
 
