@@ -124,7 +124,7 @@ class Trigger:
         try:
             return float(time_span_str)
         except Exception:
-            raise Exception("Wrong time span format: {}".format(time_span_str))
+            raise Exception(f"Wrong time span format: {time_span_str}")
 
     def _log_and_check_trigger(self, value):
         """Log a provided value and check if it activates the trigger"""

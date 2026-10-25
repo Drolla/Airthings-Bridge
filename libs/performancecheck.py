@@ -14,7 +14,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class PerformanceCheck(object):
+class PerformanceCheck:
     """Tasks performance checking
 
     Context manager to check the performance of tasks. It reports the

@@ -13,7 +13,7 @@ This tool provides a bridge between one or multiple **Airthings Wave Plus** sens
   - Optional publishing of the sensor data to an MQTT broker
 * Logging of the sensor data in a CSV file
 
-The tool runs with Python 3.x. It can be installed as a service that is launched automatically when the Raspberry Pi boots.
+The tool runs with Python 3.11 or later. It can be installed as a service that is launched automatically when the Raspberry Pi boots.
 
 ![Concept picture](Concept.png)
 
@@ -30,8 +30,7 @@ The tool runs with Python 3.x. It can be installed as a service that is launched
     * [Setup the Wave Plus Bridge as a Service](#setup-the-wave-plus-bridge-as-a-service)
 * [Raspberry Pi Installation](#raspberry-pi-installation)
     * [Raspbian installation](#raspbian-installation)
-    * [Python Library Installation (Bullseye and before)](#python-library-installation-bullseye-and-before)
-    * [Python Library Installation (Bookworm and later)](#python-library-installation-bookworm-and-later)
+    * [Python Library Installation](#python-library-installation)
 * [Debugging](#debugging)
     * [Some simple checks](#some-simple-checks)
     * [Run the Wave Plus communication test application](#run-the-wave-plus-communication-test-application)
@@ -59,12 +58,11 @@ The tool has been tested on a Raspberry Pi Zero W and on a Raspberry Pi 4, both 
 
 The following software packages need to be installed on the Raspberry Pi:
 
-* Python 3
+* Raspberry Pi OS Bookworm or later
+* Python 3.11 or later
 * The Python 3 library BluePy
 * The Python 3 library yaml (PyYAML)
 * The Python 3 library paho-mqtt (if MQTT publishing is required)
-
-The tool has been tested with Python 3.7.2, BluePy 1.3.0 and paho-mqtt 1.5.1.
 
 The sections [Raspbian installation](#raspbian-installation) and [Python Library Installation](#python-library-installation) provide support for the installation of the Raspbian OS and the Python library installation.
 
@@ -475,23 +473,7 @@ sudo bluetoothctl
 [bluetooth]# exit
 ```
 
-## Python Library Installation (Bullseye and before)
-
-The Raspbian Buster and later, lite and full versions include both Python 3.7.3. However pip3, the Python Package Installer that is required to install additional packages is not pre-installed on the lite version. The following command will install it:
-
-```
-sudo apt install python3-pip
-```
- 
-Install the Python3 packages that are missing to run the Wave Plus Bridge:
-
-```
-sudo pip3 install PyYAML
-sudo pip3 install bluepy
-sudo pip3 install paho-mqtt
-```
-
-## Python Library Installation (Bookworm and later)
+## Python Library Installation
 
 The Raspberry Pi OS bookworm and later no longer allows globally installing Python libraries using pip.
 The preferred approach is to create a virtualenv.

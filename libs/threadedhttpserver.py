@@ -9,11 +9,11 @@ See the file "LICENSE" for information on usage and redistribution of
 this file, and for a DISCLAIMER OF ALL WARRANTIES.
 """
 
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from threading import Thread
 
 
-class ThreadedHTTPServer(HTTPServer):
+class ThreadedHTTPServer(ThreadingHTTPServer):
     """Multi threaded HTTP/web server class.
 
     This HTTP/web server class can be used in the same way as the standard
@@ -23,10 +23,12 @@ class ThreadedHTTPServer(HTTPServer):
     that also the different opened sockets are not interfering.
     """
 
+    daemon_threads = True
+
     def __init__(self, *args):
-        HTTPServer.__init__(self, *args)
-        thread = Thread(target=self._serve_forever_on_other_thread)
-        thread.daemon = True
+        super().__init__(*args)
+        thread = Thread(target=self._serve_forever_on_other_thread,
+                        daemon=True)
         thread.start()
 
     def _serve_forever_on_other_thread(self):
@@ -36,17 +38,6 @@ class ThreadedHTTPServer(HTTPServer):
             pass
         finally:
             self.server_close()
-
-    def process_request(self, request, client_address):
-        thread = Thread(
-                target=self._new_request,
-                args=(self.RequestHandlerClass, request, client_address, self))
-        thread.daemon = True
-        thread.start()
-
-    def _new_request(self, HandlerClass, request, address, server):
-        HandlerClass(request, address, server)
-        self.shutdown_request(request)
 
 
 #############################################
