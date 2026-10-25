@@ -29,34 +29,26 @@ logger = logging.getLogger(__name__)
 class _Delegate(DefaultDelegate):
     """Bluetooth message receiver class
 
-    The handleNotificaiton method will be called to receive notificaiton or
+    The handleNotification method will be called to receive notification or
     indication messages.
     With the WavePlus device it has been observed that an indication message
     is not received in one chunk, but that the handleNotification method is
-    called multiple times. For this reason that received messages are
-    concatenuated.
-
-    Args:
-        mac: MAC address of the Airthing device
+    called multiple times. For this reason the received messages are
+    concatenated.
     """
 
-    data = {}
-
-    def __init__(self, mac):
-        DefaultDelegate.__init__(self)
-        self._mac = mac
-
-        # Initialize the obtained message
-        _Delegate.data[self._mac] = b""
+    def __init__(self):
+        super().__init__()
+        self._data = b""
 
     def handleNotification(self, handle, data):
-        """Notificaiton handle that adds the message to the data buffer"""
+        """Notification handle that adds the message to the data buffer"""
         logger.debug("  Received notification (%s): %s", handle, data)
-        _Delegate.data[self._mac] += data
+        self._data += data
 
     def get(self):
-        """Get the recieved message"""
-        return _Delegate.data[self._mac]
+        """Get the received message"""
+        return self._data
 
 
 class _WavePlusSensors:
@@ -160,13 +152,13 @@ class _WavePlusControl:
         """Check the received data and raise an error if it is not valid"""
         cmd = raw_data[0:1]
         if cmd != self._CMD:
-            raise ValueError(f"Got data for wrong command: Expected \
-                             {self._CMD.hex()}, got {cmd.hex()}")
+            raise ValueError(f"Got data for wrong command: Expected "
+                             f"{self._CMD.hex()}, got {cmd.hex()}")
 
         req_length = struct.calcsize(self._FORMAT)
         if len(raw_data) != req_length:
-            raise ValueError(f"Wrong length data: Expected {req_length}), \
-                              received {len(raw_data[2:])}")
+            raise ValueError(f"Wrong length data: Expected {req_length}, "
+                             f"received {len(raw_data)}")
 
     def _decode(self, value_array):
         """Parse the obtained data and format it in a dictionary"""
@@ -196,8 +188,8 @@ class _WavePlusControl:
         # Get the characteristic
         char = self._periph.getCharacteristics(uuid=self._UUID)[0]
 
-        # Define the notificaiton handle and turn notification on
-        delegate = _Delegate(self._periph)
+        # Define the notification handle and turn notification on
+        delegate = _Delegate()
         self._periph.setDelegate(delegate)
 
         logger.debug("Control characteristics: Handle=%s/%s",
@@ -213,15 +205,15 @@ class _WavePlusControl:
         self._periph.writeCharacteristic(char.valHandle, self._CMD)
 
         # Wait on notification, get the data, and disable notification
-        logger.debug("Waiting on notificaiton")
-        if not self._periph.waitForNotifications(10.0):
-            logger.error("No notification received ...")
-            return {}
-        while self._periph.waitForNotifications(0.5):
+        logger.debug("Waiting on notification")
+        received = self._periph.waitForNotifications(10.0)
+        while received and self._periph.waitForNotifications(0.5):
             pass
+        self._periph.writeCharacteristic(char.valHandle+2, b"\x00\x00")
+        if not received:
+            raise ConnectionError("No control data notification received")
         raw_data = delegate.get()
         logger.debug("Received data: %s", raw_data)
-        self._periph.writeCharacteristic(char.valHandle+2, b"\x00\x00")
 
         # Store the data in the cache, and return it
         self.cache[periph_address] = raw_data
@@ -288,16 +280,16 @@ class WavePlus:
 
         This method launches the BLE scanner 50 times to find the specified
         device. All discovered devices are cached. If a device that has to
-        be sicovered is already cached, no scanning is performed."""
+        be discovered is already cached, no scanning is performed."""
         # Device is known, there is nothing to discover
         if self._mac is not None:
             return
 
         # Check if device is already known (from scanning another device)
         if self._sn in WavePlus._sn2addr:
+            self._mac = WavePlus._sn2addr[self._sn]
             logger.info("  Device %s previously found, MAC address=%s",
                         self._sn, self._mac)
-            self._mac = WavePlus._sn2addr[self._sn]
             return
 
         # Scan for the device
@@ -319,9 +311,9 @@ class WavePlus:
 
                 # The device with the defined serial number has been found
                 if sn == self._sn:
+                    self._mac = dev.addr
                     logger.info("  Device %s found, MAC address=%s",
                                 self._sn, self._mac)
-                    self._mac = dev.addr
                     return
 
     def connect(self):
@@ -385,11 +377,12 @@ class WavePlus:
                 logger.debug("  -> s=%s, c=%s", sensor_data, control_data)
                 return {**sensor_data, **control_data}
             except Exception as error:
-                logger.warning("Failed to communicate with device \
-                               %s (attempt %s of %s): %s",
+                self.disconnect()
+                logger.warning("Failed to communicate with device "
+                               "%s (attempt %s of %s): %s",
                                self._name, attempt, retries + 1, error)
                 logger.debug("  Stack trace:", exc_info=1)
-            if attempt < retries:
+            if attempt <= retries:
                 logger.debug("Retrying in %s seconds", retry_delay)
                 time.sleep(retry_delay)
 

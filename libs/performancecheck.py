@@ -41,11 +41,11 @@ class PerformanceCheck:
         self.log_level = log_level
 
     def __enter__(self):
-        self.start_time = time.time()
-        pass
+        self.start_time = time.perf_counter()
+        return self
 
-    def __exit__(self, type, value, traceback):
-        execution_time_ms = 1000*(time.time()-self.start_time)
+    def __exit__(self, exc_type, exc_value, traceback):
+        execution_time_ms = 1000*(time.perf_counter()-self.start_time)
         logger.log(self.log_level, "%s: %.3fms",
                    self.task_short_name, execution_time_ms)
 

@@ -39,7 +39,7 @@ import argparse
 import yaml
 import json
 import fnmatch
-import urllib
+import urllib.parse
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler
 from libs.threadedhttpserver import ThreadedHTTPServer
@@ -49,14 +49,15 @@ from libs.threadedsendmail import ThreadedSendMail
 from libs.performancecheck import PerformanceCheck
 try:
     import libs.waveplus as waveplus
-except Exception:
-    pass
+except ImportError as err:
+    waveplus = None
+    waveplus_import_error = err
 if os.path.basename(os.getcwd()) == "tests":
     sys.path.append(".")
     import waveplus_emulation as waveplus_emulation
 try:
     from libs.threadedmqttpublisher import ThreadedMqttPublisher
-except Exception as err:
+except ImportError as err:
     print("MQTT service is not available:", err)
 
 __version__ = "2.0.0"
@@ -237,7 +238,7 @@ def ContextSpecificHttpRequestHandler(all_sensor_data_ts, log_database,
                 http_content_type, http_body = self.get_sensor_data_json()
 
             # If path is /csv: Provide the current sensor data in CSV format.
-            elif self.path.startswith("/csv"):
+            elif self.path.startswith("/csv") and log_database is not None:
                 http_content_type, http_body = self.get_sensor_history_csv()
 
             # If path starts with /ui/: Provide the content of the related file
@@ -462,11 +463,11 @@ class Actions:
         error_msg = None
         for sta in self.sources_trigger_actions_list:
             for source in sta[0]:
-                if source[0] not in data or source[1] not in data[source[0]]:
+                value = data.get(source[0], {}).get(source[1])
+                if not isinstance(value, int | float):
                     error_msg = "Data " + source[0] + "/" + source[1] + \
                                 " not available"
                     continue
-                value = data[source[0]][source[1]]
                 sta[1].log(value, source[0], source[1])
         if error_msg is not None:
             raise UserWarning(error_msg)
@@ -488,6 +489,10 @@ class MqttPublisher:
     The files waveplus_bridge.yaml and README.md provide explanations about the
     configuration options.
     """
+
+    # Maximum time in seconds to wait on the publication of the 'Offline'
+    # status when the publisher is stopped
+    STOP_TIMEOUT = 5
 
     def __init__(self, config):
         # Store the configuration options and complete them if necessary
@@ -526,7 +531,10 @@ class MqttPublisher:
         # Set the master status to 'Offline'
         publish_result = self.mqtt_publisher.publish_single(
             topic=self.status_topic, payload="Offline", qos=2, retain=True)
-        publish_result.wait_for_publish()
+        try:
+            publish_result.wait_for_publish(timeout=self.STOP_TIMEOUT)
+        except (ValueError, RuntimeError) as err:
+            logger.warning("Unable to publish the 'Offline' status: %s", err)
 
         # Stop and delete the MQTT publisher
         self.mqtt_publisher.stop()
@@ -607,9 +615,12 @@ def main():
         print("Error:", err)
         sys.exit(1)
 
-    # Check that the bluepy module could be loaded if the application does not
-    # run in emulated mode
-    assert "bluepy" in sys.modules or config.emulation
+    # Check that the Wave Plus module could be loaded if the application does
+    # not run in emulated mode
+    if waveplus is None and not config.emulation:
+        print("Error: Unable to load the Wave Plus module:",
+              waveplus_import_error)
+        sys.exit(1)
 
     # Configure logging
     if isinstance(config.log, dict):
@@ -672,7 +683,7 @@ def main():
                         {config.name[sn]: log_labels for sn in config.sn},
                         config.csv,
                         number_retention_records=
-                                int(config.data_retention/config.period))
+                                config.data_retention // config.period)
             logger.info("  %d records read", ldb.get_nbr_active_records())
         except PermissionError:
             logger.error("  No permission to open file %s!", config.csv)
@@ -739,11 +750,11 @@ def main():
     # Main loop
     logger.info("Start main loop. Press ctrl+C to exit program!")
     iteration_start_time = time.time()
-    if config.emulation:
-        nbr_pre_emulated = config.data_retention/config.period
-        if len(ldb.data["Time"]) < nbr_pre_emulated:
-            iteration_start_time -= \
-                    (nbr_pre_emulated-len(ldb.data["Time"]))*config.period
+    if config.emulation and ldb is not None:
+        # Pre-fill the log database by starting the iterations in the past
+        nbr_pre_emulated = config.data_retention // config.period
+        nbr_missing = nbr_pre_emulated - len(ldb.data["Time"])
+        iteration_start_time -= max(0, nbr_missing) * config.period
     while True:
         # Sensor data dictionaries: Contains the most recent data of the
         # available sensors that responded during the current iteration, with
@@ -758,7 +769,9 @@ def main():
                 sdata_ts = sdata_no_ts = {}
                 try:
                     # Read the senor values
-                    sdata_no_ts = wp_device.get()
+                    sdata_no_ts = wp_device.get(
+                            retries=config.retries,
+                            retry_delay=config.retry_delay)
                     logger.debug("  -> %s", sdata_no_ts)
                     sdata_ts = sdata_no_ts.copy()
                     sdata_ts["update_time"] = int(time.time())
@@ -801,17 +814,13 @@ def main():
 
             # Wait until the next iteration has to start
             iteration_start_time += config.period
-            if not config.emulation:
-                time.sleep(max(0, iteration_start_time - time.time()))
-            elif len(ldb.data["Time"]) > nbr_pre_emulated:
-                time.sleep(max(0, iteration_start_time - time.time()))
+            time.sleep(max(0, iteration_start_time - time.time()))
         except (KeyboardInterrupt, SystemExit):
             logger.warning("Interrupt/termination request detected")
             break
         except Exception as err:
-            logger.error("Error: *s", err)
+            logger.error("Error: %s", err)
             logger.debug("  Stack trace:", exc_info=1)
-            pass
 
     # Close connections and files
     for wp_device in wp_devices:

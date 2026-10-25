@@ -35,7 +35,7 @@ class ThreadedMqttPublisher:
         client_id (string): MQTT client id to use. If "" (default) or None, the
                 Paho library will generate a client id automatically.
         protocol (integer): Defines the MQTT protocol version. Use either
-                MQTTv31 (default) or MQTTv311.
+                MQTTv31, MQTTv311 (default) or MQTTv5.
         transport (string): Defines the transport layer that has to be either
                 "tcp" (default) or 'websockets'.
         auth (dict): Dict containing authentication parameters for the client:
@@ -73,10 +73,10 @@ class ThreadedMqttPublisher:
         mqtt_publisher.publish_single(
                 "my_nice_home/office/status", "Online")
         mqtt_publisher.publish_multiple(
-                "my_nice_home/office",
                 [{"topic": "status", "payload": "Online"},
                  {"topic": "humidity", "payload": 61.5},
-                 {"topic": "temperature", "payload": 18.5}]
+                 {"topic": "temperature", "payload": 18.5}],
+                topic_root="my_nice_home/office"
         )
     """
 
@@ -86,17 +86,15 @@ class ThreadedMqttPublisher:
                  auth=None, tls=None,
                  will=None, proxy_args=None):
 
-        # Store the configuration for later use
-        self.config = locals()
+        self.mqttc = None
 
         # Create the MQTT client
         mqttc = mqtt_client.Client(
                 callback_api_version=mqtt_client.CallbackAPIVersion.VERSION2,
-                client_id=self.config["client_id"],
-                protocol=self.config["protocol"],
-                transport=self.config["transport"]
+                client_id=client_id,
+                protocol=protocol,
+                transport=transport
         )
-        self.mqttc = mqttc
         mqttc.enable_logger()
         logger.debug("ThreadedMqttPublisher: Connect to %s", hostname)
 
@@ -104,25 +102,25 @@ class ThreadedMqttPublisher:
         # section is mainly a copy from the 'multiple' method of the Paho MQTT
         # client's publish module.
 
-        if self.config["proxy_args"] is not None:
-            mqttc.proxy_set(**self.config["proxy_args"])
+        if proxy_args is not None:
+            mqttc.proxy_set(**proxy_args)
 
-        if self.config["auth"]:
-            username = self.config["auth"].get('username')
+        if auth:
+            username = auth.get('username')
             if username:
-                password = self.config["auth"].get('password')
-                mqttc.username_pw_set(username, password)
+                mqttc.username_pw_set(username, auth.get('password'))
             else:
                 raise KeyError("The 'username' key was not found, this is "
                                "required for auth")
 
-        if self.config["will"] is not None:
-            mqttc.will_set(**self.config["will"])
+        if will is not None:
+            mqttc.will_set(**will)
 
-        if self.config["tls"] is not None:
-            if isinstance(self.config["tls"], dict):
-                insecure = self.config["tls"].pop('insecure', False)
-                mqttc.tls_set(**self.config["tls"])
+        if tls is not None:
+            if isinstance(tls, dict):
+                tls = tls.copy()
+                insecure = tls.pop('insecure', False)
+                mqttc.tls_set(**tls)
                 if insecure:
                     # Must be set *after* the `mqttc.tls_set()` call since it
                     # sets up the SSL context that `mqttc.tls_insecure_set`
@@ -130,17 +128,18 @@ class ThreadedMqttPublisher:
                     mqttc.tls_insecure_set(insecure)
             else:
                 # Assume input is SSLContext object
-                mqttc.tls_set_context(self.config["tls"])
+                mqttc.tls_set_context(tls)
 
         # Define the connection. The connection will be later performed by the
-        # loop_forever method that retries creating a connection until the
-        # broker responds.
+        # network loop that retries creating a connection until the broker
+        # responds.
         mqttc.connect_async(
-                host=self.config["hostname"],
-                port=self.config["port"],
-                keepalive=self.config["keepalive"],
-                bind_address=self.config["bind_address"],
+                host=hostname,
+                port=port,
+                keepalive=keepalive,
+                bind_address=bind_address,
         )
+        self.mqttc = mqttc
 
         # Start the loop in another thread.
         mqttc.loop_start()
@@ -157,9 +156,8 @@ class ThreadedMqttPublisher:
             return
 
         logger.debug("ThreadedMqttPublisher: Disconnect and stop")
-        self.mqttc.loop_stop()
         self.mqttc.disconnect()
-        del self.mqttc
+        self.mqttc.loop_stop()
         self.mqttc = None
 
     def __del__(self):
@@ -176,9 +174,14 @@ class ThreadedMqttPublisher:
         return publish_result
 
     def publish_multiple(self, messages, topic_root=""):
-        """Publish multiple messages to a broker."""
+        """Publish multiple messages to a broker.
+
+        Returns the publish result of the last message, or None if no
+        message is provided.
+        """
 
         logger.debug("publish_multiple %s: %s", topic_root, str(messages))
+        publish_result = None
         for message in messages:
             topic = "/".join(filter(bool, [topic_root, message["topic"]]))
             payload = message["payload"]
