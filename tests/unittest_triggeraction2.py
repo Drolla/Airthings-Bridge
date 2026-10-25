@@ -1,4 +1,4 @@
-"""Unit test for the Trigger module
+"""Unit test for the Trigger module.
 
 Copyright (C) 2022 Andreas Drollinger
 See the file "LICENSE" for information on usage and redistribution of
@@ -10,10 +10,11 @@ import time
 import unittest
 
 sys.path.append("../libs")
-from trigger import Trigger as Trigger
+from trigger import Trigger  # noqa: E402
+
 
 def s2ivstr(seconds):
-    """Seconds to intervall string"""
+    """Convert seconds to an interval string."""
     seconds = int(seconds)
     return ":".join([
         str(seconds//3600).zfill(2),
@@ -21,9 +22,10 @@ def s2ivstr(seconds):
         str(seconds % 60).zfill(2)
     ])
 
+
 def define_tests():
     global times, values, test_vectors
-    
+
     test_definitions = [line.split() for line in """
             above   10  10  10  10  10,20
             below    -   -   -   -      -
@@ -57,27 +59,28 @@ def define_tests():
     for row in test_definitions[5:5+sequence_length]:
         times.append(int(row[0]))
         values.append(int(row[1]))
-    
+
     test_vectors = []
     for test in range(0, nbr_tests):
         config = {}
-        if test_definitions[0][test+1] != "-":
-            config["above"] = \
-                [float(str) for str in test_definitions[0][test+1].split(",")]
-        if test_definitions[1][test+1] != "-":
-            config["below"] = \
-                [float(str) for str in test_definitions[1][test+1].split(",")]
+        for row, key in ((0, "above"), (1, "below")):
+            levels = test_definitions[row][test+1]
+            if levels != "-":
+                config[key] = [float(level) for level in levels.split(",")]
         if test_definitions[2][test+1] != "-":
             config["for"] = s2ivstr(test_definitions[2][test+1])
         if test_definitions[3][test+1] != "-":
             config["min_interval"] = s2ivstr(test_definitions[3][test+1])
-        trigger_counts = [int(row[test+2]) for row in test_definitions[5:5+sequence_length]]
+        trigger_counts = [int(row[test+2]) for row in
+                          test_definitions[5:5+sequence_length]]
         test_vectors.append({
             "trigger_config": config,
             "trigger_counts": trigger_counts
         })
 
+
 define_tests()
+
 
 class TriggerTest(unittest.TestCase):
 
@@ -98,17 +101,15 @@ class TriggerTest(unittest.TestCase):
 
     def tearDown(self):
         time.time = self.time_method
-    
+
     def generic_test(self, test_nbr):
         vector = test_vectors[test_nbr]
         trigger_action = Trigger(vector["trigger_config"], [self.action])
-        #print(vector["trigger_config"])
-        #print("", "S :", self.get_time())
         for index in range(len(times)):
-            self.inc_time(0 if index==0 else times[index]-times[index-1])
-            #print("", index, ":", self.get_time(), values[index], vector["trigger_counts"][index])
+            self.inc_time(0 if index == 0 else times[index]-times[index-1])
             trigger_action.log(values[index])
-            self.assertEqual(self.action_counter, vector["trigger_counts"][index])
+            self.assertEqual(self.action_counter,
+                             vector["trigger_counts"][index])
 
     def test_0(self):
         self.generic_test(0)

@@ -1,4 +1,4 @@
-"""Logger checks
+"""Logger checks.
 
 Check the availability of the loggers of the main Wave Plus Bridge module and
 the used modules.

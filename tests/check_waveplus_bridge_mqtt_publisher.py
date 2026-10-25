@@ -1,4 +1,4 @@
-"""Wave Plus Bridge MQTT publisher testing
+"""Wave Plus Bridge MQTT publisher testing.
 
 This program tests the MQTT publisher class provided by the Wave Plus Bridge
 application. It uses server defined in the test_configuration.yaml file.
@@ -8,21 +8,16 @@ See the file "LICENSE" for information on usage and redistribution of
 this file, and for a DISCLAIMER OF ALL WARRANTIES.
 """
 
-import yaml
-import sys
 import random
+import sys
 
-try:
-    import paho.mqtt.client as mqtt_client
-    import paho.mqtt.publish as mqtt_publish
-except Exception as err:
-    print("MQTT service is not available:", err)
+import yaml
 
 sys.path.append("..")
-import waveplus_bridge
+import waveplus_bridge  # noqa: E402
 
 # Read the configuration
-with open("test_configuration.yaml") as yamlfile:
+with open("test_configuration.yaml", encoding="utf-8") as yamlfile:
     mqtt_config = yaml.load(yamlfile, Loader=yaml.SafeLoader)["mqtt"]
 
 print("MQTT server configuration:")
@@ -32,9 +27,9 @@ print("  Topic:", mqtt_config["topic"])
 # Create the data structure
 print("MQTT messages:")
 data = {}
-for device in mqtt_config["publish"].keys():
+for device in mqtt_config["publish"]:
     data[device] = {
-        key: round(value,1) for (key, value) in {
+        key: round(value, 1) for (key, value) in {
             'humidity': random.uniform(20.0, 80.0),
             'radon_st': random.uniform(30, 120),
             'radon_lt': random.uniform(30, 120),
@@ -51,4 +46,5 @@ for device in mqtt_config["publish"].keys():
 print("Publish the messages on the MQTT server")
 mqtt_publisher = waveplus_bridge.MqttPublisher(mqtt_config)
 mqtt_publisher.publish(data)
+mqtt_publisher.stop()
 print("Done")

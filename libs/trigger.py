@@ -1,4 +1,4 @@
-"""Trigger class
+"""Trigger class.
 
 This file implements a trigger class used to generate alerts under configurable
 conditions.
@@ -8,8 +8,10 @@ See the file "LICENSE" for information on usage and redistribution of
 this file, and for a DISCLAIMER OF ALL WARRANTIES.
 """
 
-import time
 import datetime
+import time
+from collections.abc import Callable
+from typing import Any
 
 
 class Trigger:
@@ -74,11 +76,11 @@ class Trigger:
         trig.log(150)
     """
 
-    def __init__(self, config, action_functions):
-        def get_config(key, type_, default=None):
-            """Extracts a configuration key value and formats it if required"""
-
-            value = config[key] if key in config else default
+    def __init__(self, config: dict[str, Any],
+                 action_functions: Callable | list[Callable]):
+        def get_config(key: str, type_: str, default: Any = None) -> Any:
+            """Extract a configuration value and format it if required."""
+            value = config.get(key, default)
             if type_ == "list" and not isinstance(value, list):
                 value = [value]
             elif value != default and type_ == "time_span":
@@ -105,15 +107,14 @@ class Trigger:
         self.last_alert_trigger = None
 
     @staticmethod
-    def _parse_time_span(time_span_str):
-        """Parse a time span string
+    def _parse_time_span(time_span_str: str | float) -> float:
+        """Parse a time span string.
 
         The method returns the parsed time span in seconds as float value.
         The time span string can have one of the following formats:
             * Hours:Minutes:Seconds
             * Seconds
         """
-
         try:
             t = datetime.datetime.strptime(time_span_str, "%H:%M:%S")
             return datetime.timedelta(
@@ -127,9 +128,8 @@ class Trigger:
             raise ValueError(
                     f"Wrong time span format: {time_span_str}") from None
 
-    def _log_and_check_trigger(self, value):
-        """Log a provided value and check if it activates the trigger"""
-
+    def _log_and_check_trigger(self, value: float) -> bool:
+        """Log a provided value and check if it activates the trigger."""
         # The current time is required to check 'for' and 'min_interval'
         # conditions
         current_time = time.time()
@@ -166,12 +166,12 @@ class Trigger:
         # threshold level is exceeded.
         trigger_active = False
         if trigger_index_above >= 0 or trigger_index_below >= 0:
-            if self.last_alert_trigger is not None and \
-                    current_time >= self.last_alert_trigger+self.min_interval:
-                trigger_active = True
-            elif self.trigger_index_above != trigger_index_above or \
-                    self.trigger_index_below != trigger_index_below:
-                trigger_active = True
+            min_interval_passed = self.last_alert_trigger is not None and \
+                current_time >= self.last_alert_trigger+self.min_interval
+            level_changed = \
+                self.trigger_index_above != trigger_index_above or \
+                self.trigger_index_below != trigger_index_below
+            trigger_active = min_interval_passed or level_changed
 
         # Store the current trigger information
         self.trigger_index_above = trigger_index_above
@@ -180,10 +180,8 @@ class Trigger:
             self.last_alert_trigger = current_time
         return trigger_active
 
-    def log(self, value, *args):
-        """Log a provided value, and call the action functions if required
-        """
-
+    def log(self, value: float, *args: Any) -> None:
+        """Log a value, and call the action functions if required."""
         if self._log_and_check_trigger(value):
             for action in self.actions:
                 action(value, *args)

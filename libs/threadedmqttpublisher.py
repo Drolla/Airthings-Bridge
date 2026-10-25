@@ -1,4 +1,4 @@
-"""Threaded MQTT client to publish messages
+"""Threaded MQTT client to publish messages.
 
 This file implements a threaded MQTT client class. It is based on the
 threadding support provided by the paho.mqtt.client module.
@@ -8,8 +8,11 @@ See the file "LICENSE" for information on usage and redistribution of
 this file, and for a DISCLAIMER OF ALL WARRANTIES.
 """
 
-import time
 import logging
+import ssl
+import time
+from typing import Any
+
 import paho.mqtt.client as mqtt_client
 
 logger = logging.getLogger(__name__)
@@ -81,12 +84,15 @@ class ThreadedMqttPublisher:
     """
 
     def __init__(self,
-                 hostname, port=1883, keepalive=60, bind_address="",
-                 client_id="", protocol=mqtt_client.MQTTv311, transport="tcp",
-                 auth=None, tls=None,
-                 will=None, proxy_args=None):
-
-        self.mqttc = None
+                 hostname: str, port: int = 1883, keepalive: int = 60,
+                 bind_address: str = "", client_id: str | None = "",
+                 protocol: int = mqtt_client.MQTTv311,
+                 transport: str = "tcp",
+                 auth: dict[str, str] | None = None,
+                 tls: dict[str, Any] | ssl.SSLContext | None = None,
+                 will: dict[str, Any] | None = None,
+                 proxy_args: dict[str, Any] | None = None):
+        self.mqttc: mqtt_client.Client | None = None
 
         # Create the MQTT client
         mqttc = mqtt_client.Client(
@@ -144,13 +150,12 @@ class ThreadedMqttPublisher:
         # Start the loop in another thread.
         mqttc.loop_start()
 
-    def stop(self):
-        """Stops the network thread and the connection
+    def stop(self) -> None:
+        """Stop the network thread and the connection.
 
         Call preferably this function to stop the connection instead of
         deleting the object instance to ensure a controlled disconnection.
         """
-
         # Ignore this command if the mqttc object is already deleted (=None)
         if self.mqttc is None:
             return
@@ -160,34 +165,36 @@ class ThreadedMqttPublisher:
         self.mqttc.loop_stop()
         self.mqttc = None
 
-    def __del__(self):
+    def __del__(self) -> None:
         self.stop()
 
     def publish_single(
-            self, topic, payload=None, qos=0, retain=False, properties=None):
+            self, topic: str, payload: Any = None, qos: int = 0,
+            retain: bool = False, properties: Any = None
+    ) -> mqtt_client.MQTTMessageInfo:
         """Publish a single message to a broker."""
-
         logger.debug("  publish_single %s: %s", topic, payload)
         publish_result = self.mqttc.publish(
                 topic, payload, qos, retain, properties)
         logger.debug("  -> %s", str(publish_result))
         return publish_result
 
-    def publish_multiple(self, messages, topic_root=""):
+    def publish_multiple(self, messages: list[dict[str, Any]],
+                         topic_root: str = ""
+                         ) -> mqtt_client.MQTTMessageInfo | None:
         """Publish multiple messages to a broker.
 
         Returns the publish result of the last message, or None if no
         message is provided.
         """
-
         logger.debug("publish_multiple %s: %s", topic_root, str(messages))
         publish_result = None
         for message in messages:
             topic = "/".join(filter(bool, [topic_root, message["topic"]]))
             payload = message["payload"]
-            qos = message["qos"] if "qos" in message else 0
-            retain = message["retain"] if "retain" in message else False
-            prop = message["prop"] if "prop" in message else None
+            qos = message.get("qos", 0)
+            retain = message.get("retain", False)
+            prop = message.get("prop")
             publish_result = self.publish_single(
                     topic, payload, qos, retain, prop)
         return publish_result
@@ -206,7 +213,7 @@ if __name__ == "__main__":
     import textwrap
 
     class DescriptionHelpFormatter(argparse.RawDescriptionHelpFormatter):
-        def _fill_text(self, text, width, indent):
+        def _fill_text(self, text: str, width: int, indent: str) -> str:
             return textwrap.dedent(text)
 
     # Define and parse the arguments
@@ -286,7 +293,7 @@ if __name__ == "__main__":
         if config[dict_var_index] is not None:
             config[dict_var_index] = yaml.load(config[dict_var_index],
                                                Loader=yaml.SafeLoader)
-    # Launch ThreadedMqttPublisher 
+    # Launch ThreadedMqttPublisher
     logger.info("Start ThreadedMqttPublisher:")
     for cfg_index in config:
         logger.info("  %s: %s", cfg_index, str(config[cfg_index]))
@@ -301,7 +308,7 @@ if __name__ == "__main__":
     )
     time.sleep(1)
 
-    # Publish all the data 
+    # Publish all the data
     for message_str in config["message_dicts"]:
         logger.info("Publish data: %s ...", message_str)
         messages = []

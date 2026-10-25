@@ -1,4 +1,4 @@
-"""Unit test for the Trigger module
+"""Unit test for the Trigger module.
 
 Copyright (C) 2022 Andreas Drollinger
 See the file "LICENSE" for information on usage and redistribution of
@@ -10,13 +10,15 @@ import time
 import unittest
 
 sys.path.append("../libs")
-from trigger import Trigger as Trigger
+from trigger import Trigger  # noqa: E402
+
 
 class ParseTimeSpanTest(unittest.TestCase):
     def test_parse_time_span_0(self):
         self.assertEqual(
             Trigger._parse_time_span('00:30:00'),
             30*60)
+
 
 class TriggerActionTest(unittest.TestCase):
 
@@ -37,9 +39,9 @@ class TriggerActionTest(unittest.TestCase):
 
     def tearDown(self):
         time.time = self.time_method
-    
+
     def test_init_0(self):
-        trigger_action = Trigger(
+        Trigger(
                 {'above': 100, 'for': '00:30:00', 'min_interval': '01:00:00'},
                 [self.action])
         self.assertEqual(self.action_counter, 0)
@@ -49,7 +51,7 @@ class TriggerActionTest(unittest.TestCase):
                 {'above': 100},
                 [self.action])
         self.assertEqual(self.action_counter, 0)
-        
+
         trigger_action.log(-101)
         trigger_action.log(0)
         trigger_action.log(99)
@@ -72,7 +74,7 @@ class TriggerActionTest(unittest.TestCase):
                 {'below': 100},
                 [self.action])
         self.assertEqual(self.action_counter, 0)
-        
+
         trigger_action.log(300)
         trigger_action.log(200)
         self.assertEqual(self.action_counter, 0)
@@ -94,7 +96,7 @@ class TriggerActionTest(unittest.TestCase):
                 {'above': 100, 'for': '00:01:00'},
                 [self.action])
         self.assertEqual(self.action_counter, 0)
-        
+
         trigger_action.log(101)
         self.assertEqual(self.action_counter, 0)
 
@@ -120,7 +122,7 @@ class TriggerActionTest(unittest.TestCase):
                 {'above': 100, 'min_interval': '00:01:00'},
                 [self.action])
         self.assertEqual(self.action_counter, 0)
-        
+
         trigger_action.log(101)
         self.assertEqual(self.action_counter, 1)
 
@@ -134,7 +136,7 @@ class TriggerActionTest(unittest.TestCase):
                 {'above': 100, 'for': '00:01:00', 'min_interval': '00:01:00'},
                 [self.action])
         self.assertEqual(self.action_counter, 0)
-        
+
         trigger_action.log(101)
         self.assertEqual(self.action_counter, 0)
 
@@ -145,10 +147,11 @@ class TriggerActionTest(unittest.TestCase):
 
     def test_trigger_multi_above_1(self):
         trigger_action = Trigger(
-                {'above': [100, 200, 400, 1000, 2000], 'min_interval': '00:01:00'},
+                {'above': [100, 200, 400, 1000, 2000],
+                 'min_interval': '00:01:00'},
                 [self.action])
         self.assertEqual(self.action_counter, 0)
-        
+
         trigger_action.log(99)
         trigger_action.log(100)
         self.assertEqual(self.action_counter, 0)
