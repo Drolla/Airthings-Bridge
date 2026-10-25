@@ -32,8 +32,8 @@ waveplus_bridge.logger.warning("  waveplus_bridge")
 waveplus_bridge.logger.info("  waveplus_bridge")
 waveplus_bridge.logger.debug("  waveplus_bridge")
 
-waveplus_bridge.logdb.logger.warning("  logdb")
-waveplus_bridge.logdb.logger.info("  logdb")
-waveplus_bridge.logdb.logger.debug("  logdb")
+waveplus_bridge.sensorlog.logger.warning("  sensorlog")
+waveplus_bridge.sensorlog.logger.info("  sensorlog")
+waveplus_bridge.sensorlog.logger.debug("  sensorlog")
 
 print()

@@ -44,12 +44,12 @@ csv: /var/log/waveplus_bridge.csv
 # Data retention time in seconds (to limit the memory use)
 data_retention: 2678400 # 31 days
 
-# The graph decimation allows reducing the CSV data used to generate the graphs 
-# (see logdb.get_csv)
+# The graph decimation reduces the CSV data used to generate the graphs. Data
+# older than the specified age (in seconds) is averaged over the specified
+# number of records (decimation factor).
 graph_decimations:
-   -1.0: 8  # -31 days (full range)
-   -5760: 3 # - 8 days
-   -750: 1  # - 25 hours
+   691200: 8  # older than 8 days
+   90000: 3   # older than 25 hours
 
 
 ######## EMail alerts ########
