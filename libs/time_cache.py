@@ -18,7 +18,7 @@ class TimeCache:
     The stored data can have a time to live (TTL), and the number data read
     accesses can be limited until a data word becomes invalid. Reading a
     data word that does not exist (wrong key) or that has an obsolete live will
-    raise an IndexError.
+    raise a KeyError.
 
     Args:
         ttl: Time to live in seconds

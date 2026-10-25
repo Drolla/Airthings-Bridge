@@ -52,7 +52,7 @@ class WavePlus:
     def stop(self):
         pass
 
-    def get(self):
+    def get(self, retries=3, retry_delay=1.0):
         logger.debug("Reading sensor data for device %s", self.name)
         return {
             "humidity": EmulatedSensor(20, 100).get(),

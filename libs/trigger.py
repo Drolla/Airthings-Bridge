@@ -90,8 +90,8 @@ class Trigger:
         self.below = get_config("below", "list", [])
         self.for_ = get_config("for", "time_span", 0)
         self.min_interval = get_config("min_interval", "time_span", 0)
-        if self.above is None and self.below is None:
-            raise Exception("AlertTrigger: 'above' or 'below' is required")
+        if not self.above and not self.below:
+            raise ValueError("AlertTrigger: 'above' or 'below' is required")
 
         # Transform the action function into a list if necessary
         self.actions = action_functions if isinstance(action_functions, list) \
@@ -119,12 +119,13 @@ class Trigger:
             return datetime.timedelta(
                     hours=t.hour, minutes=t.minute,
                     seconds=t.second).total_seconds()
-        except Exception:
+        except (TypeError, ValueError):
             pass
         try:
             return float(time_span_str)
-        except Exception:
-            raise Exception(f"Wrong time span format: {time_span_str}")
+        except (TypeError, ValueError):
+            raise ValueError(
+                    f"Wrong time span format: {time_span_str}") from None
 
     def _log_and_check_trigger(self, value):
         """Log a provided value and check if it activates the trigger"""
@@ -138,8 +139,8 @@ class Trigger:
         # Ignore the level exceedance if required time span (parameter 'for')
         # is not met.
         trigger_index_above = -1
-        for index, threashold in enumerate(self.above):
-            if value <= threashold:
+        for index, threshold in enumerate(self.above):
+            if value <= threshold:
                 self.first_trigger_time_above[index] = None
             elif self.first_trigger_time_above[index] is None:
                 self.first_trigger_time_above[index] = current_time
@@ -149,8 +150,8 @@ class Trigger:
                 trigger_index_above = index
 
         trigger_index_below = -1
-        for index, threashold in enumerate(self.below):
-            if value >= threashold:
+        for index, threshold in enumerate(self.below):
+            if value >= threshold:
                 self.first_trigger_time_below[index] = None
             elif self.first_trigger_time_below[index] is None:
                 self.first_trigger_time_below[index] = current_time

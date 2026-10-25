@@ -15,7 +15,7 @@ from trigger import Trigger as Trigger
 class ParseTimeSpanTest(unittest.TestCase):
     def test_parse_time_span_0(self):
         self.assertEqual(
-            Trigger.parse_time_span('00:30:00'),
+            Trigger._parse_time_span('00:30:00'),
             30*60)
 
 class TriggerActionTest(unittest.TestCase):
