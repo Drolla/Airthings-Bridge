@@ -17,7 +17,7 @@ sys.path.append("../libs")
 from logdb import LogDB as LogDB
 from logdb import _LogDbCsv as LogDbCsv
 
-class RefDb():
+class RefDb:
     DEBUG = False
     
     def __init__(self, label_specs, restore_file = None,

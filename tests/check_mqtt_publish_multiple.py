@@ -19,7 +19,7 @@ except Exception as err:
     print("MQTT service is not available:", err)
 
 # Read the configuration
-with open("test_configuration.yaml", "r") as yamlfile:
+with open("test_configuration.yaml") as yamlfile:
     mqtt_config = yaml.load(yamlfile, Loader=yaml.SafeLoader)["mqtt"]
 
 print("MQTT server configuration:")

@@ -26,6 +26,8 @@
 # Module imports
 
 import sys
+if sys.version_info < (3, 11):  # noqa: UP036
+    sys.exit("Python 3.11 or later is required to run this program")
 import time
 import os
 import os.path
@@ -55,7 +57,8 @@ try:
     from libs.threadedmqttpublisher import ThreadedMqttPublisher
 except Exception as err:
     print("MQTT service is not available:", err)
-assert sys.version_info >= (3, 0, 0), "Python 3.x required to run this program"
+
+__version__ = "2.0.0"
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +133,7 @@ class ReadConfiguration:
 
         # Read the file
         logger.info("Read configuration file '%s'", file)
-        with open(file, "r") as yamlfile:
+        with open(file) as yamlfile:
             cfg = yaml.load(yamlfile, Loader=yaml.SafeLoader)
         return cfg
 
@@ -139,6 +142,8 @@ class ReadConfiguration:
 
         parser = argparse.ArgumentParser(
                 description="Wave Plus to Wifi/LAN Bridge")
+        parser.add_argument(
+                "--version", action="version", version=__version__)
         parser.add_argument(
                 "--period", type=int,
                 help="Time in seconds between reading the sensor values")
@@ -174,8 +179,7 @@ class ReadConfiguration:
         return repr(self.__dict__)
 
     def __iter__(self):
-        for x in self.__dict__:
-            yield x
+        yield from self.__dict__
 
 
 #############################################
@@ -230,7 +234,7 @@ def ContextSpecificHttpRequestHandler(all_sensor_data_ts, log_database,
             elif self.path.startswith("/ui/") and ".." not in self.path:
                 try:
                     http_content_type, http_body = self.get_file_content()
-                except IOError:
+                except OSError:
                     http_response = 404
                     http_body = "<h1>404 - File not found</h1>"
 

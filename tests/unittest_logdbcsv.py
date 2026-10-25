@@ -102,7 +102,7 @@ class LogDbTestClass(unittest.TestCase):
             self.ldbcsv.insert(data_set)
     
     def get_csv_content(self, file):
-        with open(self.TMP_DIR + file + ".csv", 'r') as f:
+        with open(self.TMP_DIR + file + ".csv") as f:
             file_content = f.readline().rstrip()
             file_content += "\n"
             file_content += f.readline().rstrip()

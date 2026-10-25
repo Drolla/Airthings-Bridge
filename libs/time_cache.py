@@ -11,7 +11,7 @@ this file, and for a DISCLAIMER OF ALL WARRANTIES.
 
 import time
 
-class TimeCache():
+class TimeCache:
     """Caches values with optional TTL and reload interval
 
     The class implements a dict like object with indexed access to dictionary.

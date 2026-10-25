@@ -44,7 +44,7 @@ class EmulatedSensor:
 # WavePlus test classes
 #############################################
 
-class WavePlus():
+class WavePlus:
     def __init__(self, sn, name=""):
         self.sn = sn
         self.name = name if name != "" else sn

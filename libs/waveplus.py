@@ -59,7 +59,7 @@ class _Delegate(DefaultDelegate):
         return _Delegate.data[self._mac]
 
 
-class _WavePlusSensors():
+class _WavePlusSensors:
     """WavePlus sensor reading and parsing class
 
     Args:
@@ -122,7 +122,7 @@ class _WavePlusSensors():
         return "N/A"
 
 
-class _WavePlusControl():
+class _WavePlusControl:
     """WavePlus control data reading and parsing class
 
     Args:
@@ -233,7 +233,7 @@ class _WavePlusControl():
         return cls._KEYS
 
 
-class WavePlus():
+class WavePlus:
     """Airthings Wave Plus sensor reader class.
 
     This class provides all the functionalities to access a Wave Plus sensor
@@ -383,7 +383,7 @@ class WavePlus():
                 control_data = self._control.get()
                 self.disconnect()
                 logger.debug("  -> s=%s, c=%s", sensor_data, control_data)
-                return dict(**sensor_data, **control_data)
+                return {**sensor_data, **control_data}
             except Exception as error:
                 logger.warning("Failed to communicate with device \
                                %s (attempt %s of %s): %s",
@@ -393,8 +393,8 @@ class WavePlus():
                 logger.debug("Retrying in %s seconds", retry_delay)
                 time.sleep(retry_delay)
 
-        raise ConnectionError("Failed to communicate with device {}/{}".format(
-            self._sn, self._name))
+        raise ConnectionError(
+            f"Failed to communicate with device {self._sn}/{self._name}")
 
     @classmethod
     def get_keys(cls):
