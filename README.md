@@ -147,7 +147,7 @@ port: 80
 # Log file: Comment the following line to log all information to stdout.
 # For more sophisticated logging configurations, for example for debugging, see
 # section 'Debugging' of README.md.
-log: /var/log/waveplus_bridge.log
+log: /var/log/waveplus_bridge/waveplus_bridge.log
 ```
 
 ### CSV Database and Graph Generation
@@ -158,7 +158,7 @@ The CSV file format and the graph decimation format have changed with version 2.
 
 ```
 # CSV log file: If no CSV data logging is required, comment the following line.
-csv: /var/log/waveplus_bridge.csv
+csv: /var/lib/waveplus_bridge/waveplus_bridge.csv
 
 # Data retention time in seconds (to limit the memory use)
 data_retention: 2678400 # 31 days
@@ -360,10 +360,12 @@ Adapt the configuration, see [Wave Plus Bridge Configuration](#wave-plus-bridge-
 sudo nano /opt/waveplus_bridge/waveplus_bridge.yaml
 ```
 
+Install the required Python libraries, see [Python Library Installation](#python-library-installation).
+
 The Wave Plus Bridge is now ready to be started. To get the log information displayed directly on the terminal for debugging purposes, override the log file definition (--log argument):
 
 ```
-sudo /opt/waveplus_bridge/waveplus_bridge.py \
+sudo /opt/waveplus_bridge/bin/python /opt/waveplus_bridge/waveplus_bridge.py \
        --config /opt/waveplus_bridge/waveplus_bridge.yaml \
        --log ""
 ```
@@ -374,10 +376,10 @@ The log output will confirm if the bridge could successfully connect to the Wave
 Read configuration file /opt/waveplus_bridge/waveplus_bridge.yaml
 Configuration: 
    {'period': 120, 'sn': ['2930012345', '2931234569'], 'port': 80, 
-    'csv': '/var/log/waveplus_bridge.csv', 'log': '', 
+    'csv': '/var/lib/waveplus_bridge/waveplus_bridge.csv', 'log': '', 
     'config': '/opt/waveplus_bridge/waveplus_bridge.yaml', 
     'name': {'2931234567': 'my_office', '2931234569': 'my_living'}}
- Data are logged to CSV file /var/log/waveplus_bridge.csv
+ Data are logged to CSV file /var/lib/waveplus_bridge/waveplus_bridge.csv
  HTTP/Web server started on port 80
  Press ctrl+C to exit program!
  Device 2931234567 found, MAC address=a4:da:32:b9:53:c2
@@ -391,54 +393,45 @@ Omit simply the --log argument to use the log file specified by the YAML configu
 
 ## Setup the Wave Plus Bridge as a Service
 
-Add the start/stop program provided by the Wave Plus Bridge package to the init.d directory and make it executable:
+The Wave Plus Bridge runs as systemd service under a dedicated user. Create this user:
 
 ```
-cd /etc/init.d/
-sudo cp /opt/waveplus_bridge/init.d/waveplus_bridge .
-sudo chmod 755 ./waveplus_bridge
+sudo useradd --system --no-create-home waveplus_bridge
 ```
 
-Modify this start/stop program if necessary, for example to select a different YAML configuration file.
+Install and start the service. Modify the service file if necessary, for example to select a different YAML configuration file:
 
 ```
-sudo nano ./waveplus_bridge
+sudo cp /opt/waveplus_bridge/systemd/waveplus_bridge.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now waveplus_bridge
 ```
 
-Add then the service to the system:
+Check the service status and the log output (if no log file is configured):
 
 ```
-sudo update-rc.d waveplus_bridge defaults
+systemctl status waveplus_bridge
+journalctl -u waveplus_bridge -f
 ```
 
-Check if the start/stop script can be executed correctly :
+The service is started automatically after a reboot. It can be stopped and disabled with:
 
 ```
-sudo ./waveplus_bridge
--> Usage: /etc/init.d/waveplus_bridge {start|stop|restart|status}
+sudo systemctl disable --now waveplus_bridge
 ```
 
-```
- sudo ./waveplus_bridge start
--> [ ok ] Starting waveplus_bridge (via systemctl): waveplus_bridge.service.
-```
+### Upgrade from version 1.x
 
-```
- sudo ./waveplus_bridge stop
--> [ ok ] Stopping waveplus_bridge (via systemctl): waveplus_bridge.service.
-```
-
-Check if the service starts automatically after a reboot:
-
-```
-sudo reboot
-```
-
-If necessary, the service can be disabled:
-
-```
-sudo update-rc.d waveplus_bridge disable
-```
+* Remove the init.d service of version 1.x:
+  `sudo /etc/init.d/waveplus_bridge stop`,
+  `sudo update-rc.d waveplus_bridge remove`,
+  `sudo rm /etc/init.d/waveplus_bridge`
+* The service user can't write into /var/log. Move the CSV file to the new
+  location (`sudo mkdir /var/lib/waveplus_bridge`,
+  `sudo mv /var/log/waveplus_bridge.csv /var/lib/waveplus_bridge/`), and update
+  the log and CSV file paths in the YAML configuration file.
+* Update the graph decimation definitions in the YAML configuration file, see
+  [CSV Database and Graph Generation](#csv-database-and-graph-generation).
 
 
 # Raspberry Pi Installation
@@ -816,7 +809,7 @@ log:
         level: DEBUG
         formatter: default
         class : logging.FileHandler
-        filename: /var/log/waveplus_bridge.log
+        filename: /var/log/waveplus_bridge/waveplus_bridge.log
         encoding: utf8
         mode: a
     root:
