@@ -60,7 +60,7 @@ The following software packages need to be installed on the Raspberry Pi:
 
 * Raspberry Pi OS Bookworm or later
 * Python 3.11 or later
-* The Python 3 library BluePy
+* The Python 3 library bleak (Bluetooth LE)
 * The Python 3 library yaml (PyYAML)
 * The Python 3 library paho-mqtt (if MQTT publishing is required)
 
@@ -483,6 +483,14 @@ sudo bluetoothctl
 [bluetooth]# exit
 ```
 
+The Bluetooth LE access doesn't require root privileges, but membership of the
+'bluetooth' group. Add your user to this group to run the test applications
+(log out and in again to apply it):
+
+```
+sudo usermod -aG bluetooth $USER
+```
+
 ## Python Library Installation
 
 The Raspberry Pi OS bookworm and later no longer allows globally installing Python libraries using pip.
@@ -536,12 +544,13 @@ that is stored in the 'libs' folder. If it is launched standalone, this module
 provides a minimalistic test application that reports any activities on the
 standard output.
 
-Run the 'waveplus.py' test application as root (required by the bluepy BLE
-library), and provide as first argument the update period in seconds, followed
-by one or multiple serial numbers of Wave Plus device(s):
+Run the 'waveplus.py' test application as member of the 'bluetooth' group (see
+[Raspbian installation](#raspbian-installation)), and provide as first argument
+the update period in seconds, followed by one or multiple serial numbers of Wave
+Plus device(s):
 
 ```
-sudo python waveplus.py <period> <serial_number_1> [serial_number_2] ..
+/opt/waveplus_bridge/bin/python libs/waveplus.py <period> <serial_number_1> [serial_number_2] ..
 ```
 
 That's all. The test application will continuously read the Wave Plus device
@@ -596,10 +605,10 @@ configuration file. No other arguments than one or multiple Wave Plus device
 serial numbers are required to start the application. If no HTTP port and YAML
 configuration file is specified, the Wave Plus Bridge application reports
 detailed activities, which is useful to debug communication issues. Run the
-application as root:
+application as member of the 'bluetooth' group:
 
 ```
-sudo python3 ./waveplus_bridge.py 2930031376 2930089521
+/opt/waveplus_bridge/bin/python ./waveplus_bridge.py 2930031376 2930089521
 ```
 
 This should lead to a similar log as shown in the following lines:

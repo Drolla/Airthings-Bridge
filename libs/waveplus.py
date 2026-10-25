@@ -1,11 +1,11 @@
 """Airthings Wave Plus sensor reader.
 
 The two classes, WavePlus and Sensors, have been provided by Airthings under
-the MIT licenses. The code has been slightly modified. The original code is
-available here:
+the MIT licenses. The code has been slightly modified, and ported from the
+bluepy to the bleak BLE library. The original code is available here:
                 https://github.com/Airthings/waveplus-reader
 
-Copyright (C) 2020-2022 Andreas Drollinger
+Copyright (C) 2020-2026 Andreas Drollinger
 Portions Copyright (C) 2018 Airthings
 See the file "LICENSE" for information on usage and redistribution of
 this file, and for a DISCLAIMER OF ALL WARRANTIES.
@@ -13,13 +13,15 @@ this file, and for a DISCLAIMER OF ALL WARRANTIES.
 
 # pylint: disable=broad-except
 
-import contextlib
+import asyncio
 import logging
 import struct
 import time
 
-# pylint: disable-next=E0401
-from bluepy.btle import UUID, DefaultDelegate, Peripheral, Scanner
+from bleak import BleakClient, BleakScanner
+from bleak.backends.characteristic import BleakGATTCharacteristic
+from bleak.backends.device import BLEDevice
+from bleak.backends.scanner import AdvertisementData
 
 try:
     from libs import time_cache
@@ -28,50 +30,28 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-
-class _Delegate(DefaultDelegate):
-    """Bluetooth message receiver class.
-
-    The handleNotification method will be called to receive notification or
-    indication messages.
-    With the WavePlus device it has been observed that an indication message
-    is not received in one chunk, but that the handleNotification method is
-    called multiple times. For this reason the received messages are
-    concatenated.
-    """
-
-    def __init__(self):
-        super().__init__()
-        self._data = b""
-
-    def handleNotification(self, handle: int, data: bytes) -> None:
-        """Add a received notification message to the data buffer."""
-        logger.debug("  Received notification (%s): %s", handle, data)
-        self._data += data
-
-    def get(self) -> bytes:
-        """Get the received message."""
-        return self._data
+# Bluetooth manufacturer ID of Airthings
+_AIRTHINGS_ID = 0x0334
 
 
 class _WavePlusSensors:
     """WavePlus sensor reading and parsing class.
 
     Args:
-        peripheral: BluePy peripheral class instance
+        client: Connected bleak client
     """
 
-    _UUID = UUID("b42e2a68-ade7-11e4-89d3-123b93f75cba")
+    _UUID = "b42e2a68-ade7-11e4-89d3-123b93f75cba"
     _FORMAT = "<BBBBHHHHHHHH"
     _KEYS = ("humidity", "radon_st", "radon_lt", "temperature", "pressure",
              "co2", "voc")
 
-    def __init__(self, peripheral: Peripheral):
-        self._periph = peripheral
+    def __init__(self, client: BleakClient):
+        self._client = client
 
-    def get(self) -> dict[str, float | str]:
+    async def get(self) -> dict[str, float | str]:
         """Read the sensor data and return it as dictionary."""
-        raw_data = self._read_data()
+        raw_data = bytes(await self._client.read_gatt_char(self._UUID))
         try:
             self._data_check(raw_data)
         except ValueError as error:
@@ -98,11 +78,6 @@ class _WavePlusSensors:
             "voc": value_array[9]*1.0
         }
 
-    def _read_data(self) -> bytes:
-        """Read the sensor data."""
-        char = self._periph.getCharacteristics(uuid=self._UUID)[0]
-        return char.read()
-
     @classmethod
     def get_keys(cls) -> tuple[str, ...]:
         """Get the keys provided by this class."""
@@ -119,11 +94,14 @@ class _WavePlusSensors:
 class _WavePlusControl:
     """WavePlus control data reading and parsing class.
 
+    The control data is requested by a command, and received by one or
+    multiple indication messages.
+
     Args:
-        peripheral: BluePy peripheral class instance
+        client: Connected bleak client
     """
 
-    _UUID = UUID("b42e2d06-ade7-11e4-89d3-123b93f75cba")
+    _UUID = "b42e2d06-ade7-11e4-89d3-123b93f75cba"
     _FORMAT = '<BBL12B6H'
     _KEYS = ("illuminance", "battery")  # Not implemented: measurement_periods
     _CMD = struct.pack('<B', 0x6d)
@@ -131,15 +109,16 @@ class _WavePlusControl:
     _VBAT_MIN = 2.2
     _CACHE_TTL = 3600
     _CACHE_MAX_READS = 100
+    _INDICATION_TIMEOUT = 10.0
 
     cache = time_cache.TimeCache(ttl=_CACHE_TTL, max_read=_CACHE_MAX_READS)
 
-    def __init__(self, peripheral: Peripheral):
-        self._periph = peripheral
+    def __init__(self, client: BleakClient):
+        self._client = client
 
-    def get(self) -> dict[str, int]:
+    async def get(self) -> dict[str, int]:
         """Read the control data and return it as dictionary."""
-        raw_data = self._read_data()
+        raw_data = await self._read_data()
         try:
             self._data_check(raw_data)
         except ValueError as error:
@@ -170,51 +149,48 @@ class _WavePlusControl:
 
         return {"illuminance": illuminance, "battery": vbat_pct}
 
-    def _read_data(self) -> bytes:
+    async def _read_data(self) -> bytes:
         """Read the control data (battery level and illuminance data)."""
         # Try to obtain the data from the cache
-        periph_address = self._periph.addr
+        address = self._client.address
         try:
-            raw_data = self.cache[periph_address]
+            raw_data = self.cache[address]
         except KeyError:
             pass
         else:
             logger.debug("Control data: Address=%s, used cached data: %s",
-                         periph_address, raw_data)
+                         address, raw_data)
             return raw_data
 
-        # Get the characteristic
-        char = self._periph.getCharacteristics(uuid=self._UUID)[0]
+        # An indication message may be received in multiple chunks. Collect
+        # them until the expected data length is reached.
+        data = bytearray()
+        complete = asyncio.Event()
+        req_length = struct.calcsize(self._FORMAT)
 
-        # Define the notification handle and turn notification on
-        delegate = _Delegate()
-        self._periph.setDelegate(delegate)
+        def handle_indication(_: BleakGATTCharacteristic,
+                              chunk: bytearray) -> None:
+            logger.debug("  Received indication: %s", chunk)
+            data.extend(chunk)
+            if len(data) >= req_length:
+                complete.set()
 
-        logger.debug("Control characteristics: Handle=%s/%s",
-                     char.valHandle,
-                     char.getHandle())
-        logger.debug("  CCCD value (indication disabled): %s",
-                     self._periph.readCharacteristic(char.valHandle+2))
-        self._periph.writeCharacteristic(char.valHandle+2, b"\x02\x00")
-        logger.debug("  CCCD value (indication enabled): %s",
-                     self._periph.readCharacteristic(char.valHandle+2))
-
-        # Send command to the characteristic
-        self._periph.writeCharacteristic(char.valHandle, self._CMD)
-
-        # Wait on notification, get the data, and disable notification
-        logger.debug("Waiting on notification")
-        received = self._periph.waitForNotifications(10.0)
-        while received and self._periph.waitForNotifications(0.5):
-            pass
-        self._periph.writeCharacteristic(char.valHandle+2, b"\x00\x00")
-        if not received:
-            raise ConnectionError("No control data notification received")
-        raw_data = delegate.get()
+        # Enable the indications, send the command and wait on the data
+        await self._client.start_notify(self._UUID, handle_indication)
+        try:
+            logger.debug("Send command and wait on indication")
+            await self._client.write_gatt_char(self._UUID, self._CMD)
+            await asyncio.wait_for(complete.wait(), self._INDICATION_TIMEOUT)
+        except TimeoutError:
+            raise ConnectionError(
+                    "No control data indication received") from None
+        finally:
+            await self._client.stop_notify(self._UUID)
+        raw_data = bytes(data)
         logger.debug("Received data: %s", raw_data)
 
         # Store the data in the cache, and return it
-        self.cache[periph_address] = raw_data
+        self.cache[address] = raw_data
         return raw_data
 
     @classmethod
@@ -248,100 +224,68 @@ class WavePlus:
     # if multiple WavePlus devices are used (class variable)
     _sn2addr: dict[str, str] = {}
 
+    _SCAN_TIMEOUT = 5.0
+    _CONNECT_TIMEOUT = 20.0
+
     def __init__(self, serial_number: int | str, name: str = ""):
         # The constructor does nothing else than registering the serial number
         # and the nick name. If no nickname is provided, it is defaulted to the
         # serial number.
-        self._periph: Peripheral | None = None
-        self._sensor: _WavePlusSensors | None = None
-        self._control: _WavePlusControl | None = None
-        self._mac: str | None = None
         self._sn = str(serial_number)
         self._name = name if name != "" else str(serial_number)
 
     def stop(self) -> None:
         """Stop the BLE connection to the device.
 
-        Call preferably this function to stop the connection instead of
-        deleting the object instance to ensure a controlled disconnection.
+        The connection is only open while the data is read, so there is
+        nothing to do. The method is kept for compatibility reasons.
         """
-        with contextlib.suppress(Exception):
-            self.disconnect()
 
-    def __del__(self) -> None:
-        self.stop()
-
-    def discover(self) -> None:
+    async def _discover(self) -> str:
         """Discover the device defined via the serial number.
 
-        This method launches the BLE scanner 50 times to find the specified
-        device. All discovered devices are cached. If a device that has to
-        be discovered is already cached, no scanning is performed.
+        This method scans the BLE devices until the specified device is found.
+        All discovered Wave Plus devices are cached. If a device that has to
+        be discovered is already cached, no scanning is performed. Returns the
+        device address.
         """
-        # Device is known, there is nothing to discover
-        if self._mac is not None:
-            return
-
-        # Check if device is already known (from scanning another device)
+        # Check if device is already known (e.g. from scanning another device)
         if self._sn in WavePlus._sn2addr:
-            self._mac = WavePlus._sn2addr[self._sn]
-            logger.info("  Device %s previously found, MAC address=%s",
-                        self._sn, self._mac)
-            return
+            return WavePlus._sn2addr[self._sn]
 
-        # Scan for the device
-        logger.debug("Initialize scanning/discovery")
-        scanner = Scanner().withDelegate(DefaultDelegate())
-        for _ in range(50):
-            logger.debug("  Run scan")
-            devices = scanner.scan(0.1)  # 0.1 seconds scan period
-            for dev in devices:
-                manu_data = dev.getValueText(255)
-                sn = self._parse_serial_number(manu_data)
-                logger.debug("  Found device %s", sn)
+        found = asyncio.Event()
 
-                # A serial number has been found. Register it
-                if sn is not None and sn not in WavePlus._sn2addr:
-                    WavePlus._sn2addr[sn] = dev.addr
+        def detected(device: BLEDevice, adv: AdvertisementData) -> None:
+            sn = self._parse_serial_number(
+                    adv.manufacturer_data.get(_AIRTHINGS_ID))
+            if sn is None:
+                return
+            if sn not in WavePlus._sn2addr:
+                logger.info("  Device %s found, address=%s", sn,
+                            device.address)
+                WavePlus._sn2addr[sn] = device.address
+            if sn == self._sn:
+                found.set()
 
-                # The device with the defined serial number has been found
-                if sn == self._sn:
-                    self._mac = dev.addr
-                    logger.info("  Device %s found, MAC address=%s",
-                                self._sn, self._mac)
-                    return
+        logger.debug("Scan for device %s", self._sn)
+        async with BleakScanner(detection_callback=detected):
+            try:
+                await asyncio.wait_for(found.wait(), self._SCAN_TIMEOUT)
+            except TimeoutError:
+                raise ConnectionError(
+                        "Could not find device " + self._sn) from None
+        return WavePlus._sn2addr[self._sn]
 
-    def connect(self) -> None:
-        """Establish a BLE connection to the device.
-
-        The BLE connection happens via the MAC address of the device. If the
-        address is not known, the device is scanned. The addresses of each
-        detected device is cached to limit the number of required device
-        scanning.
-        """
-        logger.debug("Connect to %s", self._sn)
-
-        # Ensure that the device (MAC) is known. Scan for the device otherwise
-        self.discover()
-        if self._mac is None:
-            raise ConnectionError("Could not find device " + self._sn)
-
-        # Connect to device
-        if self._periph is None:
-            self._periph = Peripheral(self._mac)
-        if self._sensor is None:
-            self._sensor = _WavePlusSensors(self._periph)
-        if self._control is None:
-            self._control = _WavePlusControl(self._periph)
-
-    def disconnect(self) -> None:
-        """Disconnect the connected device."""
-        if self._periph is not None:
-            with contextlib.suppress(Exception):
-                self._periph.disconnect()
-            self._periph = None
-            self._sensor = None
-            self._control = None
+    async def _read(self) -> dict[str, float | str]:
+        """Connect to the device and read the sensor and control data."""
+        address = await self._discover()
+        logger.debug("Connect to %s (%s)", self._sn, address)
+        async with BleakClient(address, timeout=self._CONNECT_TIMEOUT) \
+                as client:
+            sensor_data = await _WavePlusSensors(client).get()
+            control_data = await _WavePlusControl(client).get()
+        logger.debug("  -> s=%s, c=%s", sensor_data, control_data)
+        return {**sensor_data, **control_data}
 
     def get(self, retries: int = 3,
             retry_delay: float = 1.0) -> dict[str, float | str]:
@@ -362,14 +306,8 @@ class WavePlus:
 
         for attempt in range(1, retries + 2):
             try:
-                self.connect()
-                sensor_data = self._sensor.get()
-                control_data = self._control.get()
-                self.disconnect()
-                logger.debug("  -> s=%s, c=%s", sensor_data, control_data)
-                return {**sensor_data, **control_data}
+                return asyncio.run(self._read())
             except Exception as error:
-                self.disconnect()
                 logger.warning("Failed to communicate with device "
                                "%s (attempt %s of %s): %s",
                                self._name, attempt, retries + 1, error)
@@ -387,20 +325,18 @@ class WavePlus:
         return _WavePlusSensors.get_keys() + _WavePlusControl.get_keys()
 
     @staticmethod
-    def _parse_serial_number(hex_string: str | None) -> str | None:
-        """Parse the manufacturing data and return the serial number.
+    def _parse_serial_number(manu_data: bytes | None) -> str | None:
+        """Parse the Airthings manufacturer data and return the serial number.
 
         Returns None if the provided data is invalid.
         """
-        if hex_string is None:
+        if manu_data is None:
             return None
         try:
-            manu_data = struct.unpack("<HLBB", bytearray.fromhex(hex_string))
-        except (ValueError, struct.error):
+            serial_number, _, _ = struct.unpack("<LBB", manu_data)
+        except struct.error:
             return None
-        if manu_data[0] != 0x0334:
-            return None
-        return str(manu_data[1])
+        return str(serial_number)
 
     @property
     def name(self) -> str:
@@ -467,6 +403,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         pass
 
-    for wp_device in wp_devices:
-        wp_device.stop()
     logger.warning("waveplus ended")
