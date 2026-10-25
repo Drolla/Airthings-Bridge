@@ -237,3 +237,4 @@ mqtt:
 
 # Uncomment the following lines to enable test features
 emulation: True
+developer: True

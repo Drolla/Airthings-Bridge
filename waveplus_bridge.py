@@ -40,6 +40,7 @@ import yaml
 import json
 import fnmatch
 import urllib
+from pathlib import Path
 from http.server import BaseHTTPRequestHandler
 from libs.threadedhttpserver import ThreadedHTTPServer
 import libs.logdb as logdb
@@ -169,6 +170,10 @@ class ReadConfiguration:
                 help="""Emulates the connection with a WavePlus device. This
                         allows testing all other features, like data logging,
                         HTTP service, etc.""")
+        parser.add_argument(
+                "--developer", action='store_true', default=None,
+                help="""Enables developer features, like the /eval HTTP
+                        request that evaluates Python expressions""")
 
         return parser.parse_args()
 
@@ -189,8 +194,11 @@ class ReadConfiguration:
 # Use a factory class to add context to the HTTP request handler.
 # See: https://stackoverflow.com/questions/21631799
 
+UI_DIR = Path(__file__).resolve().parent / "ui"
+
+
 def ContextSpecificHttpRequestHandler(all_sensor_data_ts, log_database,
-                                      graph_decimations):
+                                      graph_decimations, developer):
 
     class HttpRequestHandler(BaseHTTPRequestHandler):
         """HTTP request handler used for the HTTP/web server
@@ -200,6 +208,8 @@ def ContextSpecificHttpRequestHandler(all_sensor_data_ts, log_database,
            * If path is /: Redirect the browser to /ui/index.html
            * If path is /data: Provide the current sensor data in JSON format.
            * If path starts with /ui/: Provide the content of the related file
+           * If path starts with /eval (developer mode only): Evaluate the
+             Python expression provided after the '?'
         """
 
         # HTTP content type attributes related to specific file types
@@ -231,15 +241,16 @@ def ContextSpecificHttpRequestHandler(all_sensor_data_ts, log_database,
                 http_content_type, http_body = self.get_sensor_history_csv()
 
             # If path starts with /ui/: Provide the content of the related file
-            elif self.path.startswith("/ui/") and ".." not in self.path:
+            elif self.path.startswith("/ui/"):
                 try:
                     http_content_type, http_body = self.get_file_content()
                 except OSError:
                     http_response = 404
                     http_body = "<h1>404 - File not found</h1>"
 
-            # Debug support - allow executing commands
-            elif self.path.startswith("/eval") and "?" in self.path:
+            # Developer support - allow evaluating Python expressions
+            elif developer and self.path.startswith("/eval") and \
+                    "?" in self.path:
                 try:
                     http_content_type, http_body = self.get_eval()
                 except Exception as err:
@@ -256,7 +267,9 @@ def ContextSpecificHttpRequestHandler(all_sensor_data_ts, log_database,
             self.send_header("Content-type", http_content_type)
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
-            self.wfile.write(bytes(http_body, "utf8"))
+            if isinstance(http_body, str):
+                http_body = http_body.encode("utf8")
+            self.wfile.write(http_body)
 
         def get_sensor_data_json(self):
             """Get all sensor data in JSON format"""
@@ -288,16 +301,18 @@ def ContextSpecificHttpRequestHandler(all_sensor_data_ts, log_database,
             return "application/csv", http_body
 
         def get_file_content(self):
-            """Get the content of the specified file"""
+            """Get the content of the specified file
 
-            file_name, file_extension = os.path.splitext(self.path)
-            if file_extension not in self.CONTENT_TYPES:
-                file_extension = ""
-            f = open(os.path.dirname(os.path.abspath(__file__)) + os.sep +
-                     self.path)
-            http_body = f.read()
-            f.close()
-            return self.CONTENT_TYPES[file_extension], http_body
+            Only files located in the ui directory are provided.
+            """
+
+            file_path = urllib.parse.unquote(self.path.split("?")[0])
+            file = (UI_DIR / file_path.removeprefix("/ui/")).resolve()
+            if not file.is_relative_to(UI_DIR):
+                raise FileNotFoundError(file_path)
+            content_type = self.CONTENT_TYPES.get(
+                    file.suffix, self.CONTENT_TYPES[""])
+            return content_type, file.read_bytes()
 
         def get_eval(self):
             """Evaluate a Python expression"""
@@ -633,6 +648,10 @@ def main():
             })
     logging.config.dictConfig(logging_config)
 
+    if config.developer:
+        logger.warning("Developer mode is enabled: The /eval HTTP request "
+                       "evaluates any provided Python expression!")
+
     logger.debug("Available logger:")
     for logger_name in logging.root.manager.loggerDict:
         logger.debug("   %s", logging.getLogger(logger_name))
@@ -666,7 +685,8 @@ def main():
         logger.info("Start HTTP/Web server on port %s", config.port)
         try:
             HandlerClass = ContextSpecificHttpRequestHandler(
-                    all_sensor_data_ts, ldb, config["graph_decimations"])
+                    all_sensor_data_ts, ldb, config["graph_decimations"],
+                    config.developer)
             server = ThreadedHTTPServer(
                     ("", int(config.port)), HandlerClass)
             logger.info("  Done")

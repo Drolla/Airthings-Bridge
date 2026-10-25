@@ -46,6 +46,7 @@ import time
 from threading import Thread
 import queue
 import smtplib
+import ssl
 from email.message import EmailMessage
 import logging
 
@@ -89,6 +90,7 @@ class ThreadedSendMail:
     """
 
     TIMEOUT = 1
+    SMTP_TIMEOUT = 30
 
     def __init__(self,
                  server, port=587, security=None, user=None, password=None,
@@ -152,22 +154,26 @@ class ThreadedSendMail:
             msg['To'] = to_address
         msg.set_content(message)
 
+        # Server certificates are verified for SSL and TLS connections
+        context = ssl.create_default_context()
         if self.security == "SSL":
-            srv = smtplib.SMTP_SSL(self.server, self.port)
-            srv.set_debuglevel(self.debug_level)
+            srv = smtplib.SMTP_SSL(self.server, self.port,
+                                   timeout=self.SMTP_TIMEOUT, context=context)
         else:
-            srv = smtplib.SMTP(self.server, self.port)
+            srv = smtplib.SMTP(self.server, self.port,
+                               timeout=self.SMTP_TIMEOUT)
+
+        with srv:
             srv.set_debuglevel(self.debug_level)
             if self.security == "TLS":
                 srv.ehlo()
-                srv.starttls()
+                srv.starttls(context=context)
                 srv.ehlo()
 
-        if self.user is not None and self.password is not None:
-            srv.login(self.user, self.password)
+            if self.user is not None and self.password is not None:
+                srv.login(self.user, self.password)
 
-        srv.send_message(msg)
-        srv.quit()
+            srv.send_message(msg)
         logger.info("Message sent to %s: %s", to_address, subject)
 
 

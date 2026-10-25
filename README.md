@@ -81,21 +81,23 @@ sudo /opt/waveplus_bridge/waveplus_bridge.py -h
 ```
 
 ```
-usage: waveplus_bridge.py [-h] [--period PERIOD]
+usage: waveplus_bridge.py [-h] [--version] [--period PERIOD]
                           [--data_retention DATA_RETENTION] [--port PORT]
                           [--csv CSV] [--log LOG] [--config CONFIG]
-                          [--report_performance] [sn [sn ...]]
+                          [--emulation] [--developer]
+                          [sn ...]
 
 Wave Plus to Wifi/LAN Bridge
 
-Positional arguments:
+positional arguments:
   sn                    10-digit serial number of a Wave Plus device (see
                         under the magnetic backplate. This number can be
                         combined with a device nickname, separated by a column
                         from the serial number ("2931234567, my_office")
 
-Optional arguments:
-  -h, --help            Show this help message and exit
+options:
+  -h, --help            show this help message and exit
+  --version             show program's version number and exit
   --period PERIOD       Time in seconds between reading the sensor values
   --data_retention DATA_RETENTION
                         Data retention time in seconds
@@ -103,6 +105,11 @@ Optional arguments:
   --csv CSV             CSV file to store data
   --log LOG             Log file. If not specified the stdout is used
   --config CONFIG       YAML configuration file
+  --emulation           Emulates the connection with a WavePlus device. This
+                        allows testing all other features, like data logging,
+                        HTTP service, etc.
+  --developer           Enables developer features, like the /eval HTTP
+                        request that evaluates Python expressions
 ```
 
 
@@ -176,7 +183,8 @@ smtp_server:
     # Mail server port, e.g. 25, 465, 587
     port: 465
     
-    # Options: SSL, TLS, or no definition (default)
+    # Options: SSL, TLS, or no definition (default). The server
+    # certificate is verified for SSL and TLS.
     security: SSL
     
     # Login user name

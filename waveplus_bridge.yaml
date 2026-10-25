@@ -66,7 +66,8 @@ smtp_server:
     # Mail server port, e.g. 25, 465, 587
     port: 465
     
-    # Options: SSL, TLS, or no definition (default)
+    # Options: SSL, TLS, or no definition (default). The server
+    # certificate is verified for SSL and TLS.
     security: SSL
     
     # Login user name
@@ -212,3 +213,7 @@ mqtt:
 
 # Uncomment the following lines to enable test features
 # emulation: True
+
+# Developer mode enables the /eval HTTP request that evaluates any provided
+# Python expression. Never enable it on a network you don't trust!
+# developer: True
