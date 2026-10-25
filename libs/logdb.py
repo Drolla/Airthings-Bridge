@@ -1,832 +1,584 @@
-"""Logging database
+"""LogDb: a CSV-persisted, in-memory-buffered log of numeric samples.
 
-This file implements a logging database optimized to store sequential
-data provided for example by sensors. The data is stored in the CSV
-format. A definable portion of the data is kept in the RAM to provide
-them in a fast way if requested.
+Decoupled from phc.core.device/phc.core.task: log() takes a plain timestamp and a
+{label: float} dict, and the query methods are timestamp-oriented. Single-
+writer, no file locking -- fine for PHC's single-process asyncio model, not
+safe for multi-process use.
 
-Copyright (C) 2020 Andreas Drollinger
-See the file "LICENSE" for information on usage and redistribution of
-this file, and for a DISCLAIMER OF ALL WARRANTIES.
+CSV format (see _reconcile_header/_replay for the full algorithm):
+
+    phc-logdb,version=1
+    type,time,house.desk_lamp/power,house.desk_lamp/brightness,living_light/state<padding...>
+    F,1721830000,1,80,0
+    D,1721830030,,,1
+    D,1721830060,0,nan,
+    F,1721833000,0,nan,1
+
+Line 1 is a short fixed info line. Line 2 is the label header, padded with
+trailing spaces to a reserved width so it can be rewritten in place if new
+labels are added later (see _reconcile_header) -- labels only ever grow,
+never shrink. Its first two columns, "type" and "time", are fixed and not
+part of the label set.
+
+Each data row is explicitly marked full ("F", every cell populated) or
+delta ("D", a blank cell means "unchanged since the previous row", "nan"
+marks an explicit transition to no-data), and its time column is a
+whole-second Unix timestamp (sub-second precision is not logged). Marking
+rows explicitly (rather than inferring "full" from a row-count parity) is
+required because header growth can sacrifice leading rows (see below),
+which would otherwise desync any inferred parity.
+
+A value cell with no fractional part is written without a decimal point
+(e.g. "80" not "80.0") to save space -- float(cell) parses either form
+identically on reload, so this is a pure formatting choice.
 """
 
-import os
-import time
-import re
 import array
+import bisect
 import logging
+import math
+import time
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+_INFO_LINE_PREFIX = "phc-logdb,version="
+_VERSION = 1
+_MIN_HEADER_RESERVE = 512
+_INITIAL_CHUNK_SIZE = 65536
+_NAN = float("nan")
 
-class _LogDbCsv:
-    """CSV logging database base class.
+# How get_decimated() may collapse a group of samples into one value.
+# A private copy of the vocabulary, not an import: this module stays
+# decoupled from phc.core/phc.extensions (see the module docstring).
+_AGGREGATIONS = ("avg", "min", "max")
 
-    If the CSV file does not exist, the it is created, an info line
-    written to the first line andall labels into the second line. If
-    the file exists, it reads the info line and the existing labels.
-    If new labels exists, the existing ones are combined with the new
-    ones and the combined list written into the header line of the CSV
-    file. If the info line is not recognized, the current CSV file is
-    backed up and a new one is created.
 
-    The data can be written in 2 modes to the CSV file. In standard
-    mode (log_delta=False), each data set is written as independent
-    data set to the file. Each CSV file line is therefore
-    self-contained. In the second mode only differences from the
-    previous data set are written to the file. Depending the nature of
-    the data, the CSV file size can be reduced with this mode. Once the
-    mode of the CSV file is defined, it will be maintained and a
-    mismatch with the log_delta parameter of the constructor will be
-    reported with a warning.
+class LogDb:
+    """CSV-backed, in-memory ring buffer of numeric samples.
 
-    Args:
-        labels (list of str): Label list
-        file (str): CSV file
-        log_delta (bool): Enables delta logging if True.
-            Default=False.
+    `labels` is the desired set of columns; on an existing file, the
+    persisted label set (which may already include labels no longer
+    desired, or lack ones newly desired) is reconciled first -- see
+    _reconcile_header. self.labels is always the final, combined set used
+    for both the in-memory columns and the CSV's column order.
     """
 
-    # Python string encoding
-    ENCODING = "utf-8"
+    def __init__(self, csv_path, labels: list[str], *, full_vector_interval: int = 100,
+                 max_records: int | None = None, max_age: float | None = None,
+                 header_reserve_bytes: int | None = None):
+        """Open (or create) the CSV at `csv_path`.
 
-    # Initial size of the label line
-    CSV_HEADER_ROW_LENGTH = 2048
-
-    # Initial file chunk load size that is dynamically increased
-    INIT_RELOAD_SIZE = 1000000
-
-    _NAN = float('nan')
-    _REP = float('inf')
-
-    def __init__(self, labels, file, log_delta=False):
-        logger.debug("_LogDbCsv, Init (file=%s, Labels=%s)", file, labels)
-
-        # Open the file if it exists and read the info line (1st line)
-        # and the existing labels (2nd row)
-        existing_labels = []
-        if os.path.exists(file):
-            f = open(file, "br+")
-            f.seek(0, 0)
-            file_info = str(f.readline(), self.ENCODING).strip().split(",")
-            line = str(f.readline(), self.ENCODING)
-            header_length = f.tell()
-            for label in line.split(","):
-                label = label.strip()
-                existing_labels.append(label)
-            logger.debug("  Header_length: %s", header_length)
-            logger.debug("  File info: %s", file_info)
-
-            # Check the consistency of the file info. If it is wrong,
-            # rename the file to create a new one
-            if len(file_info) != 3 or file_info[0] != "logdbcsv" or \
-                    re.fullmatch("delta=[01]", file_info[2]) is None:
-                logger.error("LogDbCsv: Incorrect CSV header line in file '" +
-                             file + "': '" + ",".join(file_info) +
-                             "'. Backup existing file and create new one!")
-                f.close()
-                os.rename(file, file + time.strftime(
-                        "%Y%m%d_%H%M%S", time.localtime(time.time())))
-            else:
-                # Select the mode from the existing file (delta=0/1)
-                existing_log_delta = \
-                        {"0": False, "1": True}[file_info[2].split("=")[1]]
-                if log_delta != existing_log_delta:
-                    logger.error("LogDbCsv: Specified log_delta parameter (%s)"
-                                 "does not match with the existing one of file"
-                                 "'%s'. Using the existing one!",
-                                 log_delta, file)
-                    log_delta = existing_log_delta
-
-        # Create the file if it does not exist
-        if not os.path.exists(file):
-            f = open(file, "bw")
-            logger.debug("  New file!")
-            header_length = None
-
-        # Create a list of all labels, and another one of the new labels
-        all_labels = existing_labels.copy()
-        new_labels = []
+        Reconciles its header against `labels` and replays any existing
+        rows into memory."""
+        if len(labels) != len(set(labels)):
+            raise ValueError(f"duplicate labels: {labels}")
         for label in labels:
-            if label in existing_labels:
-                continue
-            new_labels.append(label)
-            all_labels.append(label)
+            if "," in label:
+                raise ValueError(f"label {label!r} must not contain a comma")
 
-        logger.debug("  Existing labels: %s", existing_labels)
-        logger.debug("  New labels: %s", new_labels)
-        logger.debug("  All labels: %s", all_labels)
+        self.csv_path = Path(csv_path)
+        self.full_vector_interval = max(1, int(full_vector_interval))
+        self.max_records = max_records
+        self.max_age = max_age
+        self._header_reserve_bytes = header_reserve_bytes
+        self._trim_slack = 1.1
 
-        # Write the updated CSV header lines with the additional labels
-        if len(new_labels) > 0:
-            f.seek(0, 0)
+        self._times: array.array = array.array("d")
+        self._last_written: dict[str, float] = {}
+        # 0 means the next row written is a full-vector ("F") row. Reset to
+        # 0 on every process start (rather than trying to persist/recover
+        # the exact phase) -- costs at most one extra full row per restart.
+        self._rows_since_full = 0
+        self._fh = None
+        self._data_start = 0
 
-            # File information line
-            file_info_line = "logdbcsv,version=1.0,delta=" + \
-                             ["0", "1"][log_delta]
-            f.write(file_info_line.encode())
-            f.write(b"\n")
+        self.labels = self._reconcile_header(labels)
+        self._columns: dict[str, array.array] = {label: array.array("d") for label in self.labels}
+        self._replay()
+        self._fh = open(self.csv_path, "a", encoding="utf-8", newline="")
 
-            # Label line
-            label_line = ",".join(all_labels)
-            label_line += " "*(self.CSV_HEADER_ROW_LENGTH -
-                               len(label_line) - len(file_info_line))
-            f.write(label_line.encode())
-            f.write(b"\n")
-            f.flush()
+    def close(self) -> None:
+        """Close the underlying file handle, if open."""
+        if self._fh is not None:
+            self._fh.close()
+            self._fh = None
 
-        # Move the write pointer to the file end
-        f.seek(0, 2)
-        self.labels = all_labels
-        self.log_delta = log_delta
-        self.f = f
-        self.header_length = header_length
-        self.last_data_set = {}
-
-    def get_labels(self):
-        """Returns the list of all labels."""
-
-        return self.labels
-
-    def _str2float(self, string):
-        """Translates a CSV file value into a Python value."""
-
+    def __del__(self):
+        """Best-effort close() on garbage collection, swallowing any errors."""
         try:
-            if string == "":
-                value = self._REP if self.log_delta else self._NAN
-            elif string == "n":
-                value = self._NAN
-            else:
-                value = float(string)
-        except Exception:
-            if string.strip() == "" and self.log_delta:
-                value = self._REP
-            else:
-                value = self._NAN
-        return value
-
-    def restore_data(self, data=None, number_retention_records=None):
-        """Restores the data from the CSV file.
-
-        This method restores data from the CSV file either in the data
-        structure provided by the parameter 'data', or if this one is
-        None, to a newly created data structure.
-
-        Args:
-            data (list of arrays): Optionally provided data structure
-                where the data has to be restored. Default: None.
-            number_retention_records:
-                Optional maximum number of data records to load to reduce the
-                memory footprint.
-
-        Return:
-            list of arrays: Data structure
-        """
-
-        # Create the data structure if not provided. This structure is a
-        # dictionary of arrays. Use 'double' as array type.
-        if data is None:
-            data = {}
-            for label in self.labels:
-                data[label] = array.array("d")
-
-        # Skip data restore if the CSV file is new
-        if self.header_length is None:
-            return data
-
-        f = self.f
-
-        # Organize the data arrays as list to improve access speed.
-        # Ignore labels that have no member in the data dictionary.
-        data_matrix = []
-        for label in self.labels:
-            data_matrix.append(data[label] if label in data else None)
-
-        # Get the current file size
-        f.seek(0, 2)
-        file_size = f.tell()
-        logger.debug("  Load existing data, file size: %s", file_size)
-
-        # Read the file by chunks, starting at the file end. The chunk
-        #  size is defined by 'reload_size' that is will be increased.
-        # The data arrays are created in the inverse sense; elements 0
-        # are the last elements stored in the CSV file. After reading
-        # all data the arrays are reversed.
-        read_pos = file_size
-        reload_size = self.INIT_RELOAD_SIZE
-        all_read = False
-        nbr_records_to_load = float('inf') if number_retention_records is None\
-                                           else number_retention_records
-        while not all_read:
-            # Limit the number of records to load if required
-            if nbr_records_to_load <= 0:
-                break
-
-            # Set the read position to the new location. Ensure that the
-            # header line is not read
-            if read_pos-reload_size < self.header_length:
-                f.seek(self.header_length-2, 0)
-                all_read = True
-            else:
-                f.seek(read_pos-reload_size, 0)
-
-            # From the defined read position, go to the next line start,
-            # and adjust the exact read chunk size and read position.
-            f.readline()
-            read_size = read_pos - f.tell()
-            read_pos = f.tell()
-            logger.debug("    Load %s bytes from position %s",
-                         read_size, read_pos)
-
-            # Read the data chunk
-            data_csv = f.read(read_size)
-            logger.debug("    Read %s lines", data_csv.count(b"\n"))
-
-            # Handle each line of the CSV file in the inversed sense.
-            # Add the data in this inversed sense to the data arrays.
-            for line in reversed(data_csv.split(b"\n")):
-                # Strip removes eventual \r characters at the line end
-                data_record = str(line, self.ENCODING).strip().split(",")
-
-                # Skip the line if it is empty, and raise an error if
-                # the number of data words in the line are higher than
-                # the number of defined labels.
-                if len(data_record) < 2:
-                    continue
-                if len(data_record) > len(data_matrix):
-                    raise Exception("LogDbCVS, restore_data: Line with " +
-                                    "more than {} values: {!a}").format(
-                                    len(data_record), str(line, self.ENCODING))
-
-                # Add the data of the line to the data arrays
-                for index, data_item in enumerate(data_record):
-                    if data_matrix[index] is None:
-                        continue
-                    data_matrix[index].append(self._str2float(data_item))
-
-                # Fill up eventual missing data values with NANs
-                for index in range(len(data_record), len(self.labels)):
-                    if data_matrix[index] is None:
-                        continue
-                    data_matrix[index].append(self._NAN)
-
-                # Limit the number of records to load if required
-                nbr_records_to_load -= 1
-                if nbr_records_to_load <= 0:
-                    break
-
-            # Increase the reload chunk size
-            reload_size *= 2
-
-        # Reverse all data arrays. If only deltas are logged, populate
-        # the data values to the repeated locations
-        for ds in data_matrix:
-            if ds is not None:
-                ds.reverse()
-                if self.log_delta:
-                    value = self._NAN
-                    for index in range(len(ds)):
-                        if ds[index] == self._REP:
-                            ds[index] = value
-                        else:
-                            value = ds[index]
-
-        # Move the write pointer to the file end
-        f.seek(0, 2)
-
-        # That's it. Return the created data structure
-        logger.debug(" %s data records read (+ header line)",
-                     len(data_matrix[0]))
-        return data
-
-    def close(self):
-        """ Closes the open CSV file explicitely"""
-
-        try:
-            self.f.close()
+            self.close()
         except Exception:
             pass
 
-    def __del__(self):
-        self.close()
+    def __len__(self) -> int:
+        """Return the number of records currently held in memory."""
+        return len(self._times)
 
-    def insert(self, data_set):
-        """Inserts a new data set.
+    # ---------- public logging API ----------
 
-        Writes a new data set to the CSV file.
+    def log(self, timestamp: float, values: dict[str, float]) -> None:
+        """Append one sample row, both in memory and to the CSV.
 
-        Args:
-            data_set (dictionary): Data set to store in the CSV file.
+        `values` maps a subset (or all) of self.labels to a numeric
+        reading; any configured label not present this call is stored as
+        NaN ("no data this sample"). `timestamp` is truncated to whole
+        seconds -- sub-second precision isn't useful at logdb's
+        sample-interval scale and would otherwise bloat every row.
 
-        Return:
-            -
-        """
-
-        logger.debug("_LogDbCsv - insert: %s", data_set)
-
-        # Write the data set as new row to the CSV file: Loop over all
-        # defined labels and get the respective value from the provided
-        # data set dictionary. If the value is not defined, set it to
-        # NA. Handle the two logging modes (log_delta=0,1).
-        csv_data = []
-        for index, label in enumerate(self.labels):
-            value = self._NAN if label not in data_set or \
-                                 data_set[label] == "" else data_set[label]
-
-            # Normal (not delta log)
-            if not self.log_delta:
-                csv_data.append(str(value) if value == value else "")
-
-            # Delta log: Store value in function of the previous value
+        Trims per max_records/max_age (with slack), then writes exactly
+        one row to the CSV, flushed immediately."""
+        timestamp = int(timestamp)
+        unknown = set(values) - set(self._columns)
+        if unknown:
+            logger.warning("%s: ignoring unknown label(s) %s", self.csv_path, sorted(unknown))
+        logger.debug("%s: new record time=%d values=%s", self.csv_path, timestamp, values)
+        self._times.append(timestamp)
+        for label, col in self._columns.items():
+            if label in values and label not in unknown:
+                col.append(float(values[label]))
             else:
-                # Delta log, no previous value is available
-                if label not in self.last_data_set:
-                    csv_data.append(str(value) if value == value else "n")
+                col.append(_NAN)
+        self._maybe_trim()
+        self._write_row(timestamp)
 
-                # Delta log, previous value is available
-                else:
-                    last_value = self.last_data_set[label]
+    def _maybe_trim(self) -> None:
+        """Drop the oldest in-memory records once retention limits are exceeded.
 
-                    # Delta log, new value is not NaN
-                    if value == value:
-                        csv_data.append("" if value == last_value
-                                           else str(value))
+        Trims once the buffer exceeds max_records/max_age by more than
+        trim_slack, amortizing array.array's O(n) shift across many
+        log() calls instead of paying it on every single insert. Between
+        trims the buffer may exceed the configured limit by up to 10%;
+        documented, not silent."""
+        if self.max_records is None and self.max_age is None:
+            return
+        n = len(self._times)
+        over_count = self.max_records is not None and n > self.max_records * self._trim_slack
+        over_age = (self.max_age is not None and n > 1
+                    and (self._times[-1] - self._times[0]) > self.max_age * self._trim_slack)
+        if not (over_count or over_age):
+            return
+        cutoff = 0
+        if self.max_records is not None:
+            cutoff = max(cutoff, n - self.max_records)
+        if self.max_age is not None:
+            cutoff = max(cutoff, bisect.bisect_left(self._times, self._times[-1] - self.max_age))
+        if cutoff > 0:
+            del self._times[:cutoff]
+            for col in self._columns.values():
+                del col[:cutoff]
 
-                    # Delta log, new value is NaN
-                    else:
-                        csv_data.append("n" if last_value == last_value
-                                            else "")
+    def _write_row(self, timestamp: int) -> None:
+        """Write the in-memory record at the current tail to the CSV.
 
-                # Delta log, store the value
-                self.last_data_set[label] = value
-
-        # Write the line and flush the new data
-        self.f.write(str.encode(",".join(csv_data)))
-        self.f.write(b"\n")
-        self.f.flush()
-
-
-class LogDB:
-    """Logging database class.
-
-    This class provides a logging database to log sequential data sets,
-    like data provided in a regular interval by sensors. An in-memory
-    database will be created that has the form of a list of arrays. To
-    keep the size of this in-memory database limited, either the number
-    of retention records or the retention time (duration) can be
-    specified.
-
-    Optionally, a logging file can be defined. If it is defined and the
-    file exists its contained data is restored into the memory (by
-    respecting the above explained retention constraints). And if the
-    file does not exist it is created and the labels added to the
-    header file.
-
-    The data can be written in 2 modes to the CSV file. In standard
-    mode (log_delta=False), each data set is written as independent
-    data set to the file. Each CSV file line is therefore
-    self-contained. In the second mode only differences from the
-    previous data set are written to the file. Depending the nature of
-    the data, the CSV file size can with this mode.
-
-    The labels can be specified in different ways:
-        List of str: ["temperature", "humidity", "pressure"]
-        Dictionary of list of str:
-            {"living": ["temperature", "humidity"],
-             "office": ["temperature", "humidity", "pressure"]}
-
-    Args:
-        label_specs (see above): Label specifications
-        file (str): CSV file
-        number_retention_records (int): Number of data records to
-            retain. Default: None (no constraint).
-        retention_time (float): Time in seconds to retain the data.
-            Default: None (no constraint).
-        log_delta (bool): Enables delta logging if True. Default=False.
-    """
-
-    # Python string encoding
-    ENCODING = "utf-8"
-
-    _NAN = float('nan')
-
-    def __init__(self, label_specs, file=None,
-                 number_retention_records=None, retention_time=None,
-                 log_delta=False):
-        logger.info("LogDB, Init (file=%s, label=%s)", file, label_specs)
-
-        # Create the label list. The first label is always "Time". If
-        # the label are specified as a dictionary of list, then the
-        # label names are composed by the dictionary key and the label
-        # list element, separated by ':' (e.g. "living:temperature",
-        # "office:pressure").
-        labels = ["Time"]
-        if isinstance(label_specs, dict):
-            for main_label, sub_labels in label_specs.items():
-                for sub_label in sub_labels:
-                    labels.append(main_label + ":" + sub_label)
-        else:
-            for label in label_specs:
-                labels.append(label)
-        logger.debug("  Labels: %s", labels)
-
-        # Create the data structure (list of arrays of doubles)
-        data = {}
-        for label in labels:
-            data[label] = array.array("d")
-
-        # Open the CSV file, restore the data if it exists already
-        logdbcsv = None
-        if file is not None:
-            logdbcsv = _LogDbCsv(labels, file, log_delta=log_delta)
-            logdbcsv.restore_data(data, number_retention_records)
-
-        self.labels = labels
-        self.logdbcsv = logdbcsv
-        self.data = data
-        self.number_retention_records = number_retention_records
-        self.retention_time = retention_time
-
-    def close(self):
-        """ Closes the open CSV file explicitely"""
-
-        try:
-            self.logdbcsv.close()
-        except Exception:
-            pass
-
-    def __del__(self):
-        self.close()
-
-    def insert(self, log_data, tstamp=None):
-        """Inserts a new data set.
-
-        Writes a new data set to the in-memory database and if defined
-        also to the CSV file. If the in-memory database has been size
-        constrained, its size is reduced each time it exceeds 10% of
-        the constraint.
-
-        The data set can be defined in different ways:
-            List of float: The number and order of the values has to
-                           correspond to the defined labels. Example:
-                           [23.1, 57.1, 894.1]
-            Dictionary of float:
-                           Values can be provided for either all labels
-                           or just for some of them. Example:
-                           {"temperature": 23.1, "humidity": 57.1}
-            Dictionary of dictionary of float:
-                           Values can be provided either for all labels or
-                           just for some of them. Additional values with
-                           unknown keys are ignored. Example:
-                           {"living": {"temperature": 23.1,
-                                       "humidity": 57.1},
-                            "office": {"temperature": 24.1,
-                                       "pressure": 976}}
-
-        Args:
-            log_data (see above): Data set to store
-            tstamp (int or float): Time stamp value. If not defined the
-                current time is used.
-
-        Return:
-            -
-        """
-
-        logger.debug("LogDB - insert: %s", log_data)
-        if tstamp is None:
-            tstamp = int(time.time())
-
-        # Create the data set that has a form of a simply dictionary
-        # {label_1: value_1, label_2: value_2}
-        data_set = {"Time": tstamp}
-        if isinstance(log_data, list):
-            if len(log_data) != len(self.labels)-1:
-                raise ValueError("Got {} data words for {} defined labels!".
-                        format(len(log_data), len(self.labels)))
-            for index, label in enumerate(self.labels[1:]):
-                data_set[label] = log_data[index]
-        elif isinstance(log_data, dict):
-            for d_key, d_value in log_data.items():
-                if isinstance(d_value, dict):
-                    for d_key2, d_value2 in d_value.items():
-                        if d_key+":"+d_key2 in self.labels:
-                            data_set[d_key+":"+d_key2] = d_value2
-                else:
-                    data_set[d_key] = d_value
-            if len(data_set) > len(self.labels):
-                raise ValueError("Got {} data words for {} defined labels!".
-                        format(len(data_set), len(self.labels)))
-        else:
-            raise ValueError(
-                    "Data set format unknown: {}".format(log_data.__class__))
-
-        logger.debug("  data_set: %s", data_set)
-
-        # Register the data set in the CSV database
-        if self.logdbcsv is not None:
-            self.logdbcsv.insert(data_set)
-
-        # Register the data set in the in-memory database
+        Written as an "F" or "D" row per full_vector_interval."""
+        full = self._rows_since_full == 0
+        cells = ["F" if full else "D", str(timestamp)]
         for label in self.labels:
-            self.data[label].append(
-                data_set[label] if label in data_set else self._NAN)
-
-        # Limit the in-memory data if constraints are defined. To reduce
-        # CPU time, perform this data limitation only if the data
-        # exceeds 10% of the specified limit.
-        nbr_rec_to_delete = 0
-        if self.number_retention_records is not None and \
-                len(self.data["Time"]) > self.number_retention_records*1.1:
-            nbr_rec_to_delete = len(self.data["Time"]) - \
-                                self.number_retention_records
-        if self.retention_time is not None:
-            while nbr_rec_to_delete < len(self.data["Time"]) and \
-                    self.data["Time"][nbr_rec_to_delete] < \
-                    tstamp - self.retention_time*1.1:
-                nbr_rec_to_delete += 1
-        if nbr_rec_to_delete > 0:
-            logger.debug("  delete %s in-memory data sets",
-                         str(nbr_rec_to_delete))
-            for label in self.labels:
-                self.data[label] = self.data[label][nbr_rec_to_delete:]
-
-    def get_labels_from_spec(self, label_specs):
-        """Get a label list from label specifications.
-
-        Args:
-            label_specs: Label specifications (see below)
-
-        Return:
-            Label list
-
-        'label_specs' allow selecting the labels in multiple manners:
-            str: single regular expression string.
-                Example: ".*:temperature"
-            list of str: List of regular expression strings.
-                Example: [".*:temperature", ".*:humidity"]
-            dict of str: Dictionary of regular expression strings.
-                Example: {"living": "temp.*", "office": "hum.*"]
-            dict of list of str: Dictionary of lists of regular
-                expression strings. Example: {
-                    "living": ["temp.*", "hum.*"],
-                    "office": ["temp.*", "co2", "voc"]}
-        """
-
-        logger.debug("LogDB - get_labels_from_spec: %s", label_specs)
-        csv_file_data = []
-
-        # Create a list of re-compiled key patterns, based on the
-        # provided key specs. Create first the un-compiled list
-        key_patterns = []
-        if isinstance(label_specs, str):
-            key_patterns.append(label_specs)
-        elif isinstance(label_specs, list):
-            for key_spec in label_specs:
-                key_patterns.append(key_spec)
-        elif isinstance(label_specs, dict):
-            for prefix, sub_label_specs in label_specs.items():
-                if isinstance(sub_label_specs, list):
-                    for sub_key_spec in sub_label_specs:
-                        key_patterns.append(prefix + ":" + sub_key_spec)
-                elif isinstance(sub_label_specs, str):
-                    key_patterns.append(prefix + ":" + sub_label_specs)
-        # And compile finally the key list
-        for index, key_pattern in enumerate(key_patterns):
-            try:
-                key_patterns[index] = re.compile(key_pattern)
-            except Exception:
-                raise Exception("Unable to handle regular expression '" +
-                                str(key_pattern) + "'")
-
-        # Create the label list. The first element is the time stamp
-        labels = ["Time"]
-        for key_pattern in key_patterns:
-            for label in self.labels[1:]:
-                if key_pattern.fullmatch(label) is not None:
-                    labels.append(label)
-        return labels
+            value = self._columns[label][-1]
+            if full:
+                cells.append(self._fmt(value))
+            else:
+                prev = self._last_written.get(label)
+                unchanged = prev is not None and (
+                    prev == value or (math.isnan(prev) and math.isnan(value)))
+                cells.append("" if unchanged else self._fmt(value))
+            self._last_written[label] = value
+        self._fh.write(",".join(cells) + "\n")
+        self._fh.flush()
+        self._rows_since_full = (self._rows_since_full + 1) % self.full_vector_interval
 
     @staticmethod
-    def get_abs_index(position, index_range):
-        """Get the absolute position index in a certain range.
+    def _fmt(value: float) -> str:
+        """Format a float for the CSV.
 
-        This method is used by other methods to create absolute indexes
-        based on provided relative positions and index ranges that
-        define start and end indexes. The relative position can be
-        provided as an absolute or a normalized distance relative to
-        the start or end index.
+        "nan" for NaN, no decimal point for integer-looking values,
+        otherwise repr()."""
+        if math.isnan(value):
+            return "nan"
+        if value == int(value):
+            return str(int(value))
+        return repr(value)
 
-        Args:
-            position (positive or negative int or float):
-                If positive: Distance is relative to the start index.
-                If negative: Distance is relative to the end index.
-                If int: Distance is absolute.
-                If float: Distance is normalized to the span between
-                    the start and the end indexes.
-            index_range (2-element list of int): List representing the
-                absolute start and end indexes.
+    # ---------- query API ----------
 
-        Example: For index_range=[100,200] all the following positions
-            are equivalent, and get_abs_index returns 130:
-            position = 30, -70, 0.3, -0.7
+    def get_at(self, timestamp: float, labels: list[str] | None = None) -> dict[str, float] | None:
+        """Return the record nearest to `timestamp` (either side).
 
-        Return:
-            int: Absolute position index
-        """
-
-        ref_index = (index_range[0] if position >= 0 else index_range[1])
-        if isinstance(position, int):
-            return int(ref_index + position)
-        elif isinstance(position, float):
-            return int(ref_index + position*(index_range[1]-index_range[0]))
+        None if empty. O(log n) via bisect on the always
+        time-ascending _times."""
+        if not self._times:
+            return None
+        idx = bisect.bisect_left(self._times, timestamp)
+        if idx == 0:
+            pos = 0
+        elif idx == len(self._times):
+            pos = len(self._times) - 1
         else:
-            raise Exception("get_abs_index: type of position is " +
-                            type(position))
+            before, after = self._times[idx - 1], self._times[idx]
+            pos = idx - 1 if (timestamp - before) <= (after - timestamp) else idx
+        return self._row_at(pos, labels)
 
-    def get_index_range(self, start=0.0, end=1.0):
-        """Get the index range
+    def get_range(self, start: float, end: float, labels: list[str] | None = None) -> list[dict[str, float]]:
+        """Return every record with start <= time <= end, ascending.
 
-        Args:
-            start (int or float): Start position (see below)
-            end (int or float): End position (see below)
+        O(log n + k)."""
+        lo = bisect.bisect_left(self._times, start)
+        hi = bisect.bisect_right(self._times, end)
+        return [self._row_at(pos, labels) for pos in range(lo, hi)]
 
-        Return:
-            Absolute index range (list of begin and end index)
+    def _row_at(self, pos: int, labels: list[str] | None) -> dict[str, float]:
+        """Build one record dict at in-memory index `pos`.
 
-        The start and end indexes cover by default all the data stored
-        in the memory that may have been limited with the parameter
-        'number_retention_records'. This range can be overridden with
-        the 'start' and 'end' parameters that allow defining relative
-        positions to the default start and end index (see method
-        'get_abs_index').
+        Uses the given labels, or self.labels if None."""
+        keys = labels if labels is not None else self.labels
+        row = {"time": self._times[pos]}
+        for label in keys:
+            row[label] = self._columns[label][pos]
+        return row
 
-        Example: For number_retention_records=1000, all the following
-            start/end definitions select the same range between indexes
-            250 and 750:
-                start,end = 250,-250; -750,750; 0.25,-0.25; -0.75,0.75
-        """
+    def get_decimated(self, labels: list[str] | None = None,
+                       decimation: list[tuple[float, int]] | None = None,
+                       now: float | None = None,
+                       aggregations: dict[str, str] | None = None) -> list[dict[str, float]]:
+        """Like get_range(), but coarsens older data.
 
-        # Get the full index range
-        length = len(self.data["Time"])
-        index_range = [
-            0 if self.number_retention_records is None or
-                 length < self.number_retention_records
-              else length-self.number_retention_records,
-            length]
+        Older samples are collapsed within each decimation tier, trading
+        resolution for a bounded response size on a UI's full-history
+        request (see phc.extensions.web_ui.panels.GraphPanel).
 
-        # Apply the index range restrictions
-        index_range = [
-            self.get_abs_index(start, index_range),
-            self.get_abs_index(end, index_range)]
+        `decimation` is a list of (age_seconds, factor) tuples: a sample's
+        age (`now` minus its timestamp) is compared against each tier's
+        age_seconds, and the tier with the largest age_seconds strictly
+        less than that age supplies its factor -- age at or under every
+        tier's threshold means factor 1 (undecimated). None or empty is
+        equivalent to get_range() over the whole window. `now` defaults
+        to time.time(); overridable for tests.
 
-        return index_range
+        Groups are formed oldest-to-newest and always restart cleanly at
+        a tier boundary (never straddling two factors), each emitting one
+        row using the group's last (most recent) timestamp and, per
+        label, its non-NaN values in the group reduced per `aggregations`
+        (all-NaN emits NaN, matching get_range()'s own "no data"
+        convention, whichever reduction is used).
 
-    def get_nbr_active_records(self):
-        """Get the number of records stored in the RAM
-        """
+        `aggregations` maps a label to "avg" (the default for any label
+        not listed), "min" or "max". Averaging a column that only ever
+        holds 0/1 turns a group into the fraction of it that was "on",
+        which is the wrong answer when the caller wants "was it ever
+        on?" -- so the caller, which knows what its columns mean, says
+        so per label. Unknown labels are ignored, like `labels` itself.
 
-        return len(self.data["Time"])
+        `labels` (default: self.labels) is filtered down to labels this
+        instance actually has, so a caller-supplied label this instance
+        never logs (e.g. a graph panel selector matching more than one
+        logdb instance covers) is silently dropped rather than raising
+        KeyError -- unlike get_at()/get_range(), this is the first query
+        method called with an externally-derived label list that could
+        mismatch."""
+        keys = [label for label in (labels if labels is not None else self.labels)
+                if label in self._columns]
+        modes = aggregations or {}
+        for label, mode in modes.items():
+            if mode not in _AGGREGATIONS:
+                raise ValueError(
+                    f"invalid aggregation {mode!r} for label {label!r}, "
+                    f"expected one of {_AGGREGATIONS}")
+        n = len(self._times)
+        if n == 0:
+            return []
+        if now is None:
+            now = time.time()
 
-    def get_csv(self, label_specs=".*",
-                start=0.0, end=1.0, section_decimation_definitions=None):
-        """Get data in CSV format.
+        # Largest age first: the oldest section of data is handled by the
+        # coarsest applicable tier. A tier with factor <= 1 is a no-op
+        # (factor 1 is already the default for anything not covered by a
+        # tier) and is dropped rather than risking a zero/negative-size
+        # group below.
+        tiers = sorted(((age, factor) for age, factor in (decimation or []) if factor > 1),
+                       key=lambda tier: tier[0], reverse=True)
 
-        Get the data selected by 'label_specs', 'start' and 'end' in
-        CSV format. Optionally, sections can be defined in which the
-        data is grouped and averaged.
+        # Precompute (section_start_index, factor) boundaries, oldest
+        # first, covering [0, n) with no gaps -- mirrors _maybe_trim's own
+        # bisect usage against the always-ascending _times.
+        boundaries: list[tuple[int, int]] = []
+        prev_index = 0
+        for age, factor in tiers:
+            cutoff = max(bisect.bisect_left(self._times, now - age), prev_index)
+            if cutoff > prev_index:
+                boundaries.append((prev_index, factor))
+                prev_index = cutoff
+        boundaries.append((prev_index, 1))
 
-        Args:
-            label_specs: Label specifications (see method
-                'get_labels_from_spec'). Default=".*" (all labels
-                selected).
-            start (int or float): Start position (see below)
-            end (int or float): End position (see below)
-            section_decimation_definitions (see below): Data grouping
-                definitions
+        rows = []
+        for section, (start, factor) in enumerate(boundaries):
+            end = boundaries[section + 1][0] if section + 1 < len(boundaries) else n
+            pos = start
+            while pos < end:
+                group_end = min(pos + factor, end)
+                rows.append(self._decimated_row(pos, group_end, keys, modes))
+                pos = group_end
+        return rows
 
-        Return:
-            -
+    def _decimated_row(self, start: int, end: int, keys: list[str],
+                        modes: dict[str, str]) -> dict[str, float]:
+        """Build one decimated record from in-memory rows [start, end).
 
-        The absolute start and end index are evaluated by the method
-        'get_index_range' that take as argument the 'start' and 'end'
-        parameters.
-
-        The data can be section wise decimated to reduce the CSV data
-        size. It is for example possible to keep the data from the past
-        24 hours undecimated, to decimate the data of the past week by
-        a certain factor (e.g. 3), and to decimate the data of the past
-        month by another factor (e.g. 8).
-
-        The section_decimation_definitions parameter is a dictionary of
-        positions where a new decimation factor has to be applied. The
-        default decimation factor is initialized to 1 (no decimation).
-        Then, the data is read from the oldest to the newest one. Each
-        time a section decimation definition is reached, the
-        corresponding new decimation factor is applied. Similar to the
-        definition of the start and end positions, section positions
-        are also defined relative to the effective start and end index
-        using the method 'get_abs_index'.
-
-        Example: Decimation by 8 of the oldest 80% of data, by a factor
-            of 3 of the 10% second newest data, and a factor of 1 of the
-            newest data:
-            section_decimation_definitions = {0%:8, 0.8:3, 0.9:1}
-        """
-
-        logger.debug("LogDB - get_csv: %s", label_specs)
-        csv_file_data = []
-
-        # Get the label list and create an index list
-        labels = self.get_labels_from_spec(label_specs)
-        data_matrix = []
-        for label in labels:
-            data_matrix.append(
-                            self.data[label] if label in self.data else None)
-
-        # Get the constrained index range
-        index_range = self.get_index_range(start, end)
-
-        # Process the section decimation specification
-        length = len(data_matrix[0])
-        section_starts = []
-        pos_def_2_index = {}
-        if section_decimation_definitions is not None:
-            for position in section_decimation_definitions:
-                section_start = self.get_abs_index(position, index_range)
-                section_starts.append(section_start)
-                pos_def_2_index[section_start] = position
-        section_starts.append(length)
-        section_start = section_starts.pop(0)
-        decimation_factor = 1
-
-        # Write the header
-        csv_file_data.append(",".join(labels))
-
-        # Write the data
-        for pos in range(*index_range):
-            if pos % decimation_factor == 0:
-                sum_values = [0] * (len(data_matrix)-1)
-                sum_length = sum_values.copy()
-            for data_index, data_array in enumerate(data_matrix[1:]):
-                if data_array[pos] == data_array[pos]:
-                    sum_values[data_index] += data_array[pos]
-                    sum_length[data_index] += 1
-            if (pos+1) % decimation_factor == 0:
-                csv_line_data = [time.strftime(
-                        "%Y/%m/%d %H:%M", time.localtime(data_matrix[0][pos]))]
-                for data_index, data_array in enumerate(data_matrix[1:]):
-                    if sum_values[data_index] == sum_values[data_index] and \
-                            sum_length[data_index] > 0:
-                        data_avg = \
-                                sum_values[data_index]/sum_length[data_index]
-                        csv_line_data.append(
-                              format(data_avg, ".2f").rstrip("0").rstrip("."))
-                    else:
-                        csv_line_data.append("")
-                csv_file_data.append(",".join(csv_line_data))
-
-                if pos > section_start:
-                    decimation_factor = section_decimation_definitions[
-                                        pos_def_2_index[section_start]]
-                    section_start = section_starts.pop(0)
-
-        return "\n".join(csv_file_data)
-
-    def get(self, label_specs=".*", start=0.0, end=1.0):
-        """Get the in-memory stored data list of dictionaries.
-
-        Args:
-            label_specs: Label specifications (see method
-                'get_labels_from_spec'). Default=".*" (all labels
-                selected).
-            start (int or float): Start position (see below)
-            end (int or float): End position (see below)
-
-        Return:
-            -
-
-        The absolute start and end index are evaluated by the method
-        'get_index_range' that take as argument the 'start' and 'end'
-        parameters.
-        """
-
-        logger.debug("LogDB - get:")
-
-        # Get the label list and constrained index range
-        labels = self.get_labels_from_spec(label_specs)
-        index_range = self.get_index_range(start, end)
-
-        # Generate all data sets
-        data_sets = []
-        for pos in range(index_range[0], index_range[1]):
-            data_set = {}
-            for label in labels:
-                if label not in self.data:
+        Each label is reduced by its mode in `modes` ("avg" when absent);
+        uses the last row's timestamp. NaNs are skipped under every mode,
+        and a group with nothing but NaNs emits NaN."""
+        row = {"time": self._times[end - 1]}
+        for label in keys:
+            col = self._columns[label]
+            mode = modes.get(label, "avg")
+            total, count, best = 0.0, 0, _NAN
+            for pos in range(start, end):
+                value = col[pos]
+                if math.isnan(value):
                     continue
-                data_word = self.data[label][pos]
-                if data_word == data_word:
-                    data_set[label] = data_word
-            data_sets.append(data_set)
-            logger.debug("  %s", data_set)
+                count += 1
+                if mode == "avg":
+                    total += value
+                # `count == 1` seeds `best` on the first real value --
+                # a comparison against the initial NaN is always False,
+                # and `not best` would mis-seed on a legitimate 0.0.
+                elif count == 1 or (value > best if mode == "max" else value < best):
+                    best = value
+            row[label] = (total / count if count else _NAN) if mode == "avg" else best
+        return row
 
-        return data_sets
+    # ---------- header reconciliation ----------
+
+    def _desired_header_width(self, needed: int) -> int:
+        """Compute the reserved header width in bytes.
+
+        Uses header_reserve_bytes if configured, otherwise double the
+        content currently needed (at least _MIN_HEADER_RESERVE)."""
+        if self._header_reserve_bytes is not None:
+            return max(int(self._header_reserve_bytes), needed)
+        return max(_MIN_HEADER_RESERVE, needed * 2)
+
+    def _pad_header(self, content: str, width: int) -> bytes:
+        """Encode `content` as a header line.
+
+        Padded with trailing spaces to `width` bytes."""
+        content_bytes = content.encode("utf-8")
+        pad = width - len(content_bytes) - 1  # -1 for the trailing "\n"
+        if pad < 0:
+            pad = 0
+        return content_bytes + b" " * pad + b"\n"
+
+    def _write_fresh_header(self, labels: list[str]) -> None:
+        """Write a brand-new info + label header to csv_path.
+
+        Replaces any existing content."""
+        info = f"{_INFO_LINE_PREFIX}{_VERSION}\n".encode()
+        content = "type,time," + ",".join(labels)
+        width = self._desired_header_width(len(content.encode("utf-8")) + 1)
+        with open(self.csv_path, "wb") as f:
+            f.write(info)
+            f.write(self._pad_header(content, width))
+
+    def _rotate_existing_file(self) -> None:
+        """Rename an existing, unrecognized csv_path aside.
+
+        Renamed to a timestamped .bak file."""
+        backup = self.csv_path.with_name(self.csv_path.name + f".{int(time.time())}.bak")
+        self.csv_path.rename(backup)
+
+    def _consume_leading_lines(self, data_start: int, extra_needed: int) -> tuple[int, int]:
+        """Read forward from `data_start`, accumulating whole line lengths.
+
+        Reads until at least `extra_needed` bytes have been consumed (or
+        the file runs out). Returns (bytes_consumed, records_consumed)."""
+        consumed = 0
+        count = 0
+        with open(self.csv_path, "rb") as f:
+            f.seek(data_start)
+            while consumed < extra_needed:
+                line = f.readline()
+                if not line:
+                    break
+                consumed += len(line)
+                count += 1
+        return consumed, count
+
+    def _reconcile_header(self, configured_labels: list[str]) -> list[str]:
+        """Read or create the CSV header, growing it for new labels.
+
+        Sets self._data_start to the byte offset where data rows begin.
+        Returns the final, combined label list (persisted labels, in
+        their original order, followed by any newly configured ones)."""
+        if not self.csv_path.exists() or self.csv_path.stat().st_size == 0:
+            self.csv_path.parent.mkdir(parents=True, exist_ok=True)
+            self._write_fresh_header(configured_labels)
+            self._data_start = self.csv_path.stat().st_size
+            return list(configured_labels)
+
+        with open(self.csv_path, "rb") as f:
+            info_line = f.readline()
+            header_line = f.readline()
+            data_start = f.tell()
+
+        info_text = info_line.decode("utf-8", errors="replace")
+        if not info_text.startswith(_INFO_LINE_PREFIX) or not header_line:
+            logger.warning("%s has an unrecognized header; rotating and starting fresh",
+                            self.csv_path)
+            self._rotate_existing_file()
+            self._write_fresh_header(configured_labels)
+            self._data_start = self.csv_path.stat().st_size
+            return list(configured_labels)
+
+        header_start = len(info_line)
+        header_text = header_line.decode("utf-8").rstrip("\n").rstrip(" ")
+        persisted_labels = header_text.split(",")[2:]
+
+        new_labels = [label for label in configured_labels if label not in persisted_labels]
+        combined_labels = persisted_labels + new_labels
+
+        if not new_labels:
+            self._data_start = data_start
+            return combined_labels
+
+        logger.info("%s: extending columns with new label(s) %s", self.csv_path, new_labels)
+        new_content = "type,time," + ",".join(combined_labels)
+        needed = len(new_content.encode("utf-8")) + 1
+        old_header_width = len(header_line)
+
+        if needed <= old_header_width:
+            with open(self.csv_path, "r+b") as f:
+                f.seek(header_start)
+                f.write(self._pad_header(new_content, old_header_width))
+            self._data_start = data_start
+            return combined_labels
+
+        # Padding exhausted: grow the header into the data area, consuming
+        # (and sacrificing) whole leading data lines until enough space is
+        # freed -- documented, intentionally lossy fallback.
+        consumed_bytes, consumed_records = self._consume_leading_lines(
+            data_start, needed - old_header_width)
+        new_width = max(old_header_width + consumed_bytes, needed)
+        with open(self.csv_path, "r+b") as f:
+            f.seek(header_start)
+            f.write(self._pad_header(new_content, new_width))
+        logger.warning(
+            "logdb: %s header grew beyond its reserved space; sacrificed %d leading "
+            "record(s) to make room (consider a larger header_reserve_bytes)",
+            self.csv_path, consumed_records)
+        self._data_start = header_start + new_width
+        return combined_labels
+
+    # ---------- restore ----------
+
+    def _window_covered(self, lines: list[str], anchor_index: int, reference_time: float) -> bool:
+        """Whether replaying from `lines[anchor_index]` covers the window.
+
+        Used by _replay so its backward scan can stop growing its chunk.
+        Unbounded (no max_records/max_age) never stops early -- the scan
+        reads back to the start of the data."""
+        if self.max_records is None and self.max_age is None:
+            return False
+        covered = True
+        if self.max_records is not None:
+            covered = covered and (len(lines) - anchor_index) >= self.max_records
+        if self.max_age is not None:
+            anchor_time = float(lines[anchor_index].split(",", 2)[1])
+            covered = covered and (reference_time - anchor_time) >= self.max_age
+        return covered
+
+    def _parse_row(self, line: str, current: dict[str, float]) -> float:
+        """Parse one CSV data row, updating `current` (label -> value) in place.
+
+        A blank cell means "unchanged" (keep current[label]); a missing
+        trailing cell (row shorter than self.labels, i.e. that label
+        didn't exist yet when this row was written) means NaN; anything
+        else is parsed as a float ("nan" -> NaN). Returns the row's
+        timestamp.
+
+        Caller must copy what it needs from `current` before the next
+        call, since it's mutated in place."""
+        fields = line.split(",")
+        timestamp = float(fields[1])
+        cells = fields[2:]
+        for i, label in enumerate(self.labels):
+            if i >= len(cells):
+                current[label] = _NAN
+                continue
+            cell = cells[i]
+            if cell == "":
+                continue
+            current[label] = _NAN if cell == "nan" else float(cell)
+        return timestamp
+
+    def _retention_cutoff(self, times: array.array, reference_time: float) -> int:
+        """Compute the index below which replayed records fall outside limits.
+
+        max_records/max_age."""
+        n = len(times)
+        cutoff = 0
+        if self.max_records is not None:
+            cutoff = max(cutoff, n - self.max_records)
+        if self.max_age is not None:
+            cutoff = max(cutoff, bisect.bisect_left(times, reference_time - self.max_age))
+        return cutoff
+
+    def _replay(self) -> None:
+        """Rebuild self._times/self._columns from the CSV's surviving data rows.
+
+        A backward, growing-chunk scan finds the earliest "F" row that
+        already covers the desired retention window (bounded by
+        full_vector_interval, unlike an unbounded backward search), then
+        replays forward from there and trims to the exact window.
+
+        Uses wall-clock time.time() (not the file's own last timestamp)
+        as the max_age reference, so a long process downtime doesn't
+        resurrect data that would immediately be re-trimmed once ticking
+        resumes."""
+        file_size = self.csv_path.stat().st_size
+        if file_size <= self._data_start:
+            return
+
+        reference_time = time.time()
+        chunk_size = _INITIAL_CHUNK_SIZE
+        lines: list[str] = []
+        f_positions: list[int] = []
+        with open(self.csv_path, "rb") as f:
+            while True:
+                start = max(self._data_start, file_size - chunk_size)
+                f.seek(start)
+                if start > self._data_start:
+                    f.readline()  # discard partial leading line, snap to a line boundary
+                chunk = f.read().decode("utf-8")
+                lines = chunk.split("\n")
+                if lines and lines[-1] == "":
+                    lines.pop()
+                f_positions = [i for i, line in enumerate(lines) if line.startswith("F,")]
+                reached_start = start <= self._data_start
+                covered = f_positions and self._window_covered(
+                    lines, f_positions[0], reference_time)
+                if reached_start or covered:
+                    break
+                chunk_size *= 2
+
+        if not f_positions:
+            logger.warning("no full-vector row found in %s; starting with empty history",
+                            self.csv_path)
+            return
+
+        # Parse straight into the arrays, then trim from the front: keeps peak
+        # memory (which CPython retains as RSS) near the arrays' own size.
+        current = {label: _NAN for label in self.labels}
+        columns = [(label, self._columns[label]) for label in self.labels]
+        for line in lines[f_positions[0]:]:
+            self._times.append(self._parse_row(line, current))
+            for label, col in columns:
+                col.append(current[label])
+
+        cutoff = self._retention_cutoff(self._times, reference_time)
+        if cutoff > 0:
+            del self._times[:cutoff]
+            for col in self._columns.values():
+                del col[:cutoff]
+        if self._times:
+            self._last_written = current
+        logger.info("%s: loaded %d record(s) from existing file", self.csv_path, len(self._times))

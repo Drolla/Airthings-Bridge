@@ -154,6 +154,8 @@ log: /var/log/waveplus_bridge.log
 
 The CSV database is used to generate data graphs on the HTML page and to allow processing the data in external tools. The CSV file is reloaded after a restart, which guarantees that the generated graphs shows also the previously recorded data.
 
+The CSV file format and the graph decimation format have changed with version 2.0.0. A CSV file of a previous version is converted at the first start; the original file is kept as `<file>.v1.bak`.
+
 ```
 # CSV log file: If no CSV data logging is required, comment the following line.
 csv: /var/log/waveplus_bridge.csv
@@ -161,12 +163,12 @@ csv: /var/log/waveplus_bridge.csv
 # Data retention time in seconds (to limit the memory use)
 data_retention: 2678400 # 31 days
 
-# The graph decimation allows reducing the CSV data used to generate the graphs 
-# (see logdb.get_csv)
+# The graph decimation reduces the CSV data used to generate the graphs. Data
+# older than the specified age (in seconds) is averaged over the specified
+# number of records (decimation factor).
 graph_decimations:
-   -1.0: 8  # -31 days (full range)
-   -5760: 3 # - 8 days
-   -750: 1  # - 25 hours
+   691200: 8  # older than 8 days
+   90000: 3   # older than 25 hours
 ```
 
 ### EMail Alerts
@@ -777,6 +779,7 @@ application and the modules, together with their default logging level:
 * libs : Common library/module logger (WARNING)
 * libs.waveplus : waveplus module logger (WARNING)
 * libs.logdb : logdb module logger (WARNING)
+* libs.sensorlog : sensorlog module logger (WARNING)
 * libs.threadedsendmail : threadedsendmail module logger (WARNING)
 * libs.performancecheck : performancecheck module logger (WARNING)
 
@@ -819,6 +822,7 @@ log:
       # libs.waveplus:
       #   level: INFO
       # libs.logdb:
+      # libs.sensorlog:
       # libs.threadedmqttpublisher:
       # libs.threadedsendmail:
       # libs.performancecheck:

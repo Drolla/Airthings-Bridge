@@ -8,9 +8,10 @@
   surrounding code.
 - Keep comments and documentation concise. Correct them, don't expand them.
 - `libs/logdb.py` is a verbatim copy of the phc logdb module
-  (https://github.com/Drolla/phc/tree/main/phc/extensions/logdb). The only
-  local change is the logger name. Fix logdb in phc and copy it over; put
-  bridge-specific behaviour into `libs/sensorlog.py`.
+  (https://github.com/Drolla/phc/tree/main/phc/extensions/logdb), and
+  `tests/test_logdb.py` of its tests. The only local changes are the module
+  and logger names. Fix logdb in phc and copy it over; put bridge-specific
+  behaviour into `libs/sensorlog.py`.
 - BLE access uses bleak (asyncio) behind the synchronous `WavePlus` API in
   `libs/waveplus.py`. The service runs without root.
 - The `/eval` HTTP endpoint is kept, but only active in developer mode.

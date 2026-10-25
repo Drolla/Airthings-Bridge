@@ -39,11 +39,12 @@ import argparse
 import yaml
 import json
 import fnmatch
+import html
 import urllib.parse
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler
 from libs.threadedhttpserver import ThreadedHTTPServer
-import libs.logdb as logdb
+import libs.sensorlog as sensorlog
 import libs.trigger as trigger
 from libs.threadedsendmail import ThreadedSendMail
 from libs.performancecheck import PerformanceCheck
@@ -239,7 +240,13 @@ def ContextSpecificHttpRequestHandler(all_sensor_data_ts, log_database,
 
             # If path is /csv: Provide the current sensor data in CSV format.
             elif self.path.startswith("/csv") and log_database is not None:
-                http_content_type, http_body = self.get_sensor_history_csv()
+                try:
+                    http_content_type, http_body = \
+                            self.get_sensor_history_csv()
+                except ValueError as err:
+                    http_response = 400
+                    http_body = "<h1>400 - Bad request</h1>" + \
+                                "<p>" + html.escape(str(err)) + "</p>"
 
             # If path starts with /ui/: Provide the content of the related file
             elif self.path.startswith("/ui/"):
@@ -297,8 +304,7 @@ def ContextSpecificHttpRequestHandler(all_sensor_data_ts, log_database,
 
             with PerformanceCheck("HTTP request, provide sensor data"):
                 http_body = log_database.get_csv(
-                        device_pattern,
-                        section_decimation_definitions=graph_decimations)
+                        device_pattern, graph_decimations)
             return "application/csv", http_body
 
         def get_file_content(self):
@@ -679,12 +685,11 @@ def main():
                       "temperature", "pressure", "co2", "voc"]
         try:
             with PerformanceCheck("LogDB/CSV file loading"):
-                ldb = logdb.LogDB(
-                        {config.name[sn]: log_labels for sn in config.sn},
+                ldb = sensorlog.SensorLog(
                         config.csv,
-                        number_retention_records=
-                                config.data_retention // config.period)
-            logger.info("  %d records read", ldb.get_nbr_active_records())
+                        {config.name[sn]: log_labels for sn in config.sn},
+                        retention=config.data_retention)
+            logger.info("  %d records read", len(ldb))
         except PermissionError:
             logger.error("  No permission to open file %s!", config.csv)
         except Exception as err:
@@ -695,8 +700,14 @@ def main():
     if config.port is not None:
         logger.info("Start HTTP/Web server on port %s", config.port)
         try:
+            graph_decimations = sensorlog.parse_decimations(
+                    config.graph_decimations)
+        except ValueError as err:
+            logger.critical("  %s", err)
+            sys.exit(1)
+        try:
             HandlerClass = ContextSpecificHttpRequestHandler(
-                    all_sensor_data_ts, ldb, config["graph_decimations"],
+                    all_sensor_data_ts, ldb, graph_decimations,
                     config.developer)
             server = ThreadedHTTPServer(
                     ("", int(config.port)), HandlerClass)
@@ -750,11 +761,10 @@ def main():
     # Main loop
     logger.info("Start main loop. Press ctrl+C to exit program!")
     iteration_start_time = time.time()
-    if config.emulation and ldb is not None:
-        # Pre-fill the log database by starting the iterations in the past
-        nbr_pre_emulated = config.data_retention // config.period
-        nbr_missing = nbr_pre_emulated - len(ldb.data["Time"])
-        iteration_start_time -= max(0, nbr_missing) * config.period
+    if config.emulation and ldb is not None and len(ldb) == 0:
+        # Pre-fill the empty log database by starting the iterations in the
+        # past (the logged data has to be in chronological order)
+        iteration_start_time -= config.data_retention
     while True:
         # Sensor data dictionaries: Contains the most recent data of the
         # available sensors that responded during the current iteration, with
@@ -786,10 +796,7 @@ def main():
             # Store data in log database
             if ldb is not None:
                 try:
-                    ldb.insert(sensor_data_no_ts,
-                               tstamp=int(iteration_start_time))
-                except ValueError as err:
-                    logger.warning("Failed to log the data: %s", err)
+                    ldb.log(int(iteration_start_time), sensor_data_no_ts)
                 except Exception as err:
                     logger.error("Failed to log the data: %s", err)
                     logger.debug("  Stack trace:", exc_info=1)
