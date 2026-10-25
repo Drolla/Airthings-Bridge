@@ -1,4 +1,4 @@
-"""Test of the paho.mqtt.publish.multiple method
+"""Test of the paho.mqtt.publish.multiple method.
 
 This program tests the paho.mqtt.publish.multiple method, by using the server
 definitions provided by the test_configuration.yaml file.
@@ -8,18 +8,18 @@ See the file "LICENSE" for information on usage and redistribution of
 this file, and for a DISCLAIMER OF ALL WARRANTIES.
 """
 
-import yaml
 import sys
-import random
+
+import yaml
 
 try:
     import paho.mqtt.client as mqtt_client
     import paho.mqtt.publish as mqtt_publish
-except Exception as err:
-    print("MQTT service is not available:", err)
+except ImportError as err:
+    sys.exit(f"MQTT service is not available: {err}")
 
 # Read the configuration
-with open("test_configuration.yaml") as yamlfile:
+with open("test_configuration.yaml", encoding="utf-8") as yamlfile:
     mqtt_config = yaml.load(yamlfile, Loader=yaml.SafeLoader)["mqtt"]
 
 print("MQTT server configuration:")

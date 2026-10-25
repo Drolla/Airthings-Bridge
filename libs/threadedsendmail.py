@@ -1,4 +1,4 @@
-"""Threaded mail sender
+"""Threaded mail sender.
 
 This class implements a mail transmission service running on another thread. It
 supports optionally SSL and TLS encryption.
@@ -42,19 +42,19 @@ See the file "LICENSE" for information on usage and redistribution of
 this file, and for a DISCLAIMER OF ALL WARRANTIES.
 """
 
-import time
-from threading import Thread
+import logging
 import queue
 import smtplib
 import ssl
+import time
 from email.message import EmailMessage
-import logging
+from threading import Thread
 
 logger = logging.getLogger(__name__)
 
 
 class ThreadedSendMail:
-    """Simple threaded class to send mails
+    """Simple threaded class to send mails.
 
     The constructor has various parameters to define the SMTP server
     information and credentials. It creates a new thread that is used to send
@@ -93,8 +93,9 @@ class ThreadedSendMail:
     SMTP_TIMEOUT = 30
 
     def __init__(self,
-                 server, port=587, security=None, user=None, password=None,
-                 debug_level=0):
+                 server: str, port: int = 587, security: str | None = None,
+                 user: str | None = None, password: str | None = None,
+                 debug_level: int = 0):
         self.server = server
         self.port = port
         self.security = security
@@ -105,46 +106,45 @@ class ThreadedSendMail:
         # Enable threaded mode only in non-debug mode
         if debug_level == 0:
             self.queue = queue.Queue()
-            thread = Thread(target=self._queue_handler)
-            thread.daemon = True
-            thread.start()
+            Thread(target=self._queue_handler, daemon=True).start()
 
     # See: https://stackoverflow.com/questions/19033818/how-to-call-a-
     #      function-on-a-running-python-thread
-    def send_mail(self, from_address, to_address, subject, message):
-        """Mail send message user command
+    def send_mail(self, from_address: str, to_address: str | list[str],
+                  subject: str, message: str) -> None:
+        """Mail send message user command.
 
         Add the mail send command to the thread queue in threaded mode.
         Otherwise launch the mail send command directly.
         """
-
         if self.debug_level == 0:
             self.queue.put((self._send_mail,
                             [from_address, to_address, subject, message], {}))
         else:
             self._send_mail(from_address, to_address, subject, message)
 
-    def _queue_handler(self):
-        """Thread queue handler"""
-
+    def _queue_handler(self) -> None:
+        """Thread queue handler."""
         while True:
             try:
                 function, args, kwargs = self.queue.get(timeout=self.TIMEOUT)
-                function(*args, **kwargs)
-                self.queue.task_done()
             except queue.Empty:
-                pass
+                continue
+            try:
+                function(*args, **kwargs)
             except Exception:
                 logger.exception("  Stack trace:")
+            finally:
+                self.queue.task_done()
 
-    def _send_mail(self, from_address, to_address, subject, message):
-        """Send mail service
+    def _send_mail(self, from_address: str, to_address: str | list[str],
+                   subject: str, message: str) -> None:
+        """Send mail service.
 
         Unless executed in debug mode, this method is executed in the separate
         thread. It establish connection to the SMTP server using optional
         encryption modes, and sends then the message to this server.
         """
-
         msg = EmailMessage()
         msg['Subject'] = subject
         msg['From'] = from_address

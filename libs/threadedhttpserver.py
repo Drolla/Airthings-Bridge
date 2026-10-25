@@ -1,4 +1,4 @@
-"""Multi threaded HTTP/web server
+"""Multi threaded HTTP/web server.
 
 This file implements a multi threaded HTTP/Web server. The port listening and
 the request handler for each open socket is executed in an individual daemon
@@ -9,7 +9,8 @@ See the file "LICENSE" for information on usage and redistribution of
 this file, and for a DISCLAIMER OF ALL WARRANTIES.
 """
 
-from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from socketserver import BaseRequestHandler
 from threading import Thread
 
 
@@ -25,13 +26,14 @@ class ThreadedHTTPServer(ThreadingHTTPServer):
 
     daemon_threads = True
 
-    def __init__(self, *args):
-        super().__init__(*args)
+    def __init__(self, server_address: tuple[str, int],
+                 handler_class: type[BaseRequestHandler]):
+        super().__init__(server_address, handler_class)
         thread = Thread(target=self._serve_forever_on_other_thread,
                         daemon=True)
         thread.start()
 
-    def _serve_forever_on_other_thread(self):
+    def _serve_forever_on_other_thread(self) -> None:
         try:
             self.serve_forever()
         except KeyboardInterrupt:
@@ -50,21 +52,20 @@ if __name__ == "__main__":
     # Change the following line to select a different port number
     DEMO_PORT_NUMBER = 8000
 
-    # This class will handles any incoming request from the browser
-    class myHandler(BaseHTTPRequestHandler):
+    # This class handles any incoming request from the browser
+    class MyHandler(BaseHTTPRequestHandler):
         # Handler for the GET requests
-        def do_GET(self):
+        def do_GET(self) -> None:
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
             self.end_headers()
             self.wfile.write(
                     bytes("Hello World !<br>Time: " + str(int(time.time())),
                           "utf8"))
-            return
 
     # Create the threaded server
     print('Starting HTTP server at port', DEMO_PORT_NUMBER, flush=True)
-    server = ThreadedHTTPServer(('', DEMO_PORT_NUMBER), myHandler)
+    server = ThreadedHTTPServer(('', DEMO_PORT_NUMBER), MyHandler)
 
     # Stay in the wait loop
     while True:

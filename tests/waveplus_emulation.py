@@ -1,4 +1,4 @@
-"""Airthings Wave Plus sensor reader emulation
+"""Airthings Wave Plus sensor reader emulation.
 
 The WavePlus class implemented in this file emulates the class of the same name
 provided in ../libs and used by the Wave Plus Bridge application. It is used
@@ -13,30 +13,31 @@ See the file "LICENSE" for information on usage and redistribution of
 this file, and for a DISCLAIMER OF ALL WARRANTIES.
 """
 
-import random
 import logging
+import random
 
 logger = logging.getLogger(__name__)
+
 
 #############################################
 # Emulated sensor
 #############################################
 
 class EmulatedSensor:
-    def __init__(self, min, max):
-        self.min = min
-        self.max = max
-        self.value = (min+max)/2
+    """Sensor emulation with a random walk between a minimum and maximum."""
 
-    def get(self):
+    def __init__(self, min_value: float, max_value: float):
+        self.min = min_value
+        self.max = max_value
+        self.value = (min_value+max_value)/2
+
+    def get(self) -> float:
+        """Get the next emulated sensor value."""
         self.value = round(
                 self.value +
                 random.random() * (self.max-self.value)/20 -
                 random.random() * (self.value-self.min)/20, 1)
-        if self.value > self.max:
-            self.value = self.max
-        if self.value < self.min:
-            self.value = self.min
+        self.value = max(self.min, min(self.max, self.value))
         return self.value
 
 
@@ -45,24 +46,29 @@ class EmulatedSensor:
 #############################################
 
 class WavePlus:
-    def __init__(self, sn, name=""):
+    """Emulation of the WavePlus class of the waveplus module."""
+
+    def __init__(self, sn: int | str, name: str = ""):
         self.sn = sn
         self.name = name if name != "" else sn
+        self._sensors = {
+            "humidity": EmulatedSensor(20, 100),
+            "radon_st": EmulatedSensor(20, 500),
+            "radon_lt": EmulatedSensor(20, 500),
+            "temperature": EmulatedSensor(10, 35),
+            "pressure": EmulatedSensor(20, 500),
+            "co2": EmulatedSensor(20, 500),
+            "voc": EmulatedSensor(20, 1000),
+        }
 
-    def stop(self):
+    def stop(self) -> None:
         pass
 
-    def get(self, retries=3, retry_delay=1.0):
+    def get(self, retries: int = 3,
+            retry_delay: float = 1.0) -> dict[str, float]:
+        """Get the emulated sensor data."""
         logger.debug("Reading sensor data for device %s", self.name)
-        return {
-            "humidity": EmulatedSensor(20, 100).get(),
-            "radon_st": EmulatedSensor(20, 500).get(),
-            "radon_lt": EmulatedSensor(20, 500).get(),
-            "temperature": EmulatedSensor(10, 35).get(),
-            "pressure": EmulatedSensor(20, 500).get(),
-            "co2": EmulatedSensor(20, 500).get(),
-            "voc": EmulatedSensor(20, 1000).get()
-        }
+        return {key: sensor.get() for key, sensor in self._sensors.items()}
 
 
 if __name__ == "__main__":

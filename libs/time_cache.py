@@ -1,4 +1,4 @@
-"""Cache with a time to live (TTL)
+"""Cache with a time to live (TTL).
 
 This file implements a cache where the stored data words have optionally a time
 to live. Also, the number of read access to each data word can be limited
@@ -10,9 +10,12 @@ this file, and for a DISCLAIMER OF ALL WARRANTIES.
 """
 
 import time
+from collections.abc import Hashable
+from typing import Any
+
 
 class TimeCache:
-    """Caches values with optional TTL and reload interval
+    """Caches values with optional TTL and reload interval.
 
     The class implements a dict like object with indexed access to dictionary.
     The stored data can have a time to live (TTL), and the number data read
@@ -34,29 +37,28 @@ class TimeCache:
         -> Error: KeyError
     """
 
-    def __init__(self, ttl=None, max_read=None):
+    def __init__(self, ttl: float | None = None,
+                 max_read: int | None = None):
         self._ttl = ttl
         self._max_read = max_read
-        self._data_dict = {}
+        self._data_dict: dict[Hashable, list] = {}
 
-    def __contains__(self, key):
+    def __contains__(self, key: Hashable) -> bool:
         if key not in self._data_dict:
             return False
         value = self._data_dict[key]
         if self._ttl is not None and value[1]+self._ttl < time.monotonic():
             return False
-        if self._max_read is not None and value[2] >= self._max_read:
-            return False
-        return True
+        return self._max_read is None or value[2] < self._max_read
 
-    def __getitem__(self, key):
-        if not self.__contains__(key):
-            raise KeyError
+    def __getitem__(self, key: Hashable) -> Any:
+        if key not in self:
+            raise KeyError(key)
         value = self._data_dict[key]
         value[2] += 1
         return value[0]
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: Hashable, value: Any) -> None:
         self._data_dict[key] = [value, time.monotonic(), 0]
 
 
@@ -65,9 +67,9 @@ class TimeCache:
 #############################################
 
 if __name__ == "__main__":
-    import sys
     import logging
     import random
+    import sys
 
     # Configure the logger
     FORMAT = "%(asctime)s - %(message)s"
@@ -75,34 +77,34 @@ if __name__ == "__main__":
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.INFO)
 
-    def write_data(cache, key):
-        """Write a random data word in a cache location defined by the key"""
+    def write_data(cache: TimeCache, key: int) -> None:
+        """Write a random data word in a cache location defined by the key."""
         value = random.random()
         cache[key] = value
         logger.info("  Cache[%s] <= %s", key, value)
 
-    def fill_cache(cache, cache_size):
-        """Fill a cache with random data"""
+    def fill_cache(cache: TimeCache, cache_size: int) -> None:
+        """Fill a cache with random data."""
         logger.info("Fill the cache:")
         for key in range(cache_size):
             write_data(cache, key)
 
-    def read_data(cache, key):
-        """Read a cache location"""
+    def read_data(cache: TimeCache, key: int) -> None:
+        """Read a cache location."""
         try:
             value = cache[key]
             logger.info("  Cache[%s] -> %s", key, value)
         except KeyError:
             logger.info("  Cache[%s] -> (empty)", key)
 
-    def read_data_many_times(cache, cache_size, nbr_iterations):
-        """Loop through the cache and read the data repeatedly"""
+    def read_data_many_times(cache: TimeCache, cache_size: int,
+                             nbr_iterations: int) -> None:
+        """Loop through the cache and read the data repeatedly."""
         logger.info("Read the data:")
         for _ in range(nbr_iterations):
             for key in range(cache_size):
                 read_data(cache, key)
                 time.sleep(0.1)
-
 
     logger.info("**** Cache without constraints ****")
 
@@ -123,13 +125,12 @@ if __name__ == "__main__":
     fill_cache(my_cache, 3)
     read_data_many_times(my_cache, cache_size=3, nbr_iterations=3)
 
-
-    logger.info("**** Cache with max_read=2 and ttl=1.0, random access ****")
+    logger.info("**** Cache with max_read=1 and ttl=0.5, random access ****")
     my_cache = TimeCache(ttl=0.5, max_read=1)
     fill_cache(my_cache, 3)
 
     logger.info("Write/read access:")
-    for iteration in range(5):
+    for _ in range(5):
         for item in range(3):
             if random.random() > 0.75:
                 write_data(my_cache, item)
