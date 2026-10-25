@@ -58,9 +58,6 @@ try:
 except ImportError as err:
     waveplus = None
     waveplus_import_error = err
-if os.path.basename(os.getcwd()) == "tests":
-    sys.path.append(".")
-    import waveplus_emulation
 try:
     from libs.threadedmqttpublisher import ThreadedMqttPublisher
 except ImportError as err:
@@ -639,9 +636,9 @@ def main() -> None:
         logging_config = config.log
     else:
         # Define the default configuration for the case no YAML configuration
-        # file is provided. Use by default a file handler, otherwise a stream
-        # handler. If no port is defined, set the log level of this main
-        # application to 'debug'.
+        # file is provided. Use a file handler if a log file is defined,
+        # otherwise a stream handler. If no port is defined, set the log level
+        # of this main application to 'debug'.
         log_level = "DEBUG" if config.port is None else "INFO"
         logging_config = {
             'version': 1,
@@ -653,7 +650,7 @@ def main() -> None:
                 '__main__': {'level': log_level},
                 'libs': {'level': 'WARNING'}}
         }
-        if isinstance(config.log, str):
+        if isinstance(config.log, str) and config.log != "":
             logging_config.update({
                 'root': {'level': 'WARNING', 'handlers': ['file']},
                 'handlers': {'file': {
@@ -754,16 +751,15 @@ def main() -> None:
             logger.debug("    Stack trace:", exc_info=True)
             sys.exit(1)
 
-    # Initialize the access to all Wave Plus devices
+    # Initialize the access to all Wave Plus devices. Use the emulation module
+    # of the tests folder in emulation mode.
     logger.info("Setup WavePlus device access")
-    wp_devices = []
-    for sn in config.sn:
-        if not config.emulation:
-            wp_device = waveplus.WavePlus(sn, config.name[sn])
-        else:
-            wp_device = waveplus_emulation.WavePlus(sn, config.name[sn])
-            logger.warning("Use WavePlus emulation module")
-        wp_devices.append(wp_device)
+    wp_module = waveplus
+    if config.emulation:
+        sys.path.append(str(Path(__file__).resolve().parent / "tests"))
+        import waveplus_emulation as wp_module
+        logger.warning("Use WavePlus emulation module")
+    wp_devices = [wp_module.WavePlus(sn, config.name[sn]) for sn in config.sn]
     logger.info("  Done")
 
     # Main loop

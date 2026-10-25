@@ -28,7 +28,7 @@ port: 80
 # Log file: Comment the following line to log all information to stdout.
 # For more sophisticated logging configurations, for example for debugging, see
 # section 'Debugging' of README.md.
-log: /var/log/waveplus_bridge.log
+log: /var/log/waveplus_bridge/waveplus_bridge.log
 
 
 ######## CSV database and graph generation ########
@@ -39,7 +39,7 @@ log: /var/log/waveplus_bridge.log
 # recorded data.
 
 # CSV log file: If no CSV data logging is required, comment the following line.
-csv: /var/log/waveplus_bridge.csv
+csv: /var/lib/waveplus_bridge/waveplus_bridge.csv
 
 # Data retention time in seconds (to limit the memory use)
 data_retention: 2678400 # 31 days

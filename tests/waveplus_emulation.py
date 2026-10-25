@@ -3,10 +3,9 @@
 The WavePlus class implemented in this file emulates the class of the same name
 provided in ../libs and used by the Wave Plus Bridge application. It is used
 for testing purposes and operates without Bluetooth LE (BLE) library and
-without connection of a real Wave Plus device. It is loaded if the Wave Plus
-Bridge is executed in this ./test folder, and if either the flag '--emulation'
-is provided to the application or the parameter 'emulation' is set to 'True' in
-the provided YAML configuration file.
+without connection of a real Wave Plus device. It is loaded if either the flag
+'--emulation' is provided to the application or the parameter 'emulation' is
+set to 'True' in the provided YAML configuration file.
 
 Copyright (C) 2020-2022 Andreas Drollinger
 See the file "LICENSE" for information on usage and redistribution of
