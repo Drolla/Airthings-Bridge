@@ -7,6 +7,7 @@ file, and for a DISCLAIMER OF ALL WARRANTIES.
 """
 
 import struct
+from typing import ClassVar
 
 from bleak import BleakClient
 
@@ -34,7 +35,8 @@ class WavePlus(AirthingsDevice):
 
     PRODUCT_NAME = "Wave Plus"
     SERIAL_PREFIXES = ("2930",)
-    SENSOR_KEYS = ("humidity", "radon_st", "radon_lt", "temperature", "pressure", "co2", "voc")
+    SENSOR_KEYS: ClassVar[tuple[str, ...]] = (
+        "humidity", "radon_st", "radon_lt", "temperature", "pressure", "co2", "voc")
     STATUS_KEYS = ("illuminance", "battery")
 
     DATA_UUID = "b42e2a68-ade7-11e4-89d3-123b93f75cba"

@@ -81,7 +81,7 @@ class MqttPublisher:
 
     def _messages(self, cycle: Cycle) -> list[tuple[str, Any]]:
         publish = self._config.publish
-        messages = []
+        messages: list[tuple[str, Any]] = []
         for reading in cycle.readings:
             sensors = publish.get(reading.device, publish.get("*"))
             if sensors is None:

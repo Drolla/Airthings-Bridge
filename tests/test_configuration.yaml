@@ -1,6 +1,6 @@
 ######## Basic Airthings Bridge configuration ########
 #
-# The basic configuration includes the specification of the Wave Plus devices
+# The basic configuration includes the specification of the Airthings devices
 # serial numbers, the sensor update period, the HTTP port and optionally the log
 # file.
 
@@ -13,7 +13,7 @@ retries: 3
 # Amount of time in seconds to wait before attempting reconnection
 retry_delay: 1
 
-# SN: List of 10-digit serial number of one or multiple Wave Plus devices (see 
+# SN: List of 10-digit serial number of one or multiple Airthings devices (see 
 # under the magnetic backplate. Each number can be combined with a device 
 # nickname, separated by a column from the serial number 
 # (e.g. "2930123456, my_office").
@@ -27,7 +27,7 @@ port: 80
 
 # Log file: Comment the following line to log all information to stdout.
 # For more sophisticated logging configurations, for example for debugging, see
-# section 'Debugging' of README.md.
+# docs/debugging.md.
 #log: airthings_bridge_test.log
 
 log:
@@ -222,7 +222,7 @@ mqtt:
     # be composed in the following way: <topic root>/<device>/<sensor>
     topic: my_nice_home/airthings_bridge
 
-    # List the Wave Plus devices and their sensors that should be published. A
+    # List the devices and their values that should be published. A
     # list of sensors to publish can be assigned to each device:
     #    <devicename>: ['<sensor1>', '<sensor2'>, ...]
     # The wildcard character '*' (enclosed in '') can be used to select all 

@@ -36,5 +36,8 @@ then before committing:
 
 ```
 python -m ruff check .
+python -m mypy
 python -m pytest
 ```
+
+Keep the documentation in `docs/` and `CHANGELOG.md` up to date.

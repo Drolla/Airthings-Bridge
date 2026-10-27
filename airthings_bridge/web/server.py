@@ -63,10 +63,15 @@ class WebServer:
 
     @property
     def port(self) -> int:
-        """Listening port, assigned by the system if 0 was configured."""
+        """Listening port, assigned by the system if 0 was configured.
+
+        With port 0, the IPv4 and IPv6 sockets get different ports; the IPv4
+        port is returned.
+        """
         if self._runner is not None:
-            for address in self._runner.addresses:
-                return address[1]
+            addresses = sorted(self._runner.addresses, key=len)  # IPv4: (host, port)
+            if addresses:
+                return addresses[0][1]
         return self._port
 
     async def start(self) -> None:

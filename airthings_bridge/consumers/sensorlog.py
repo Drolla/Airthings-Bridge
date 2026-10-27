@@ -171,7 +171,7 @@ class SensorLog:
             values = [_NAN] * len(v1_labels)
             nbr_records = 0
             for line in f:
-                cells = line.strip().split(",")
+                cells: list[str | None] = list(line.strip().split(","))
                 if len(cells) < 2:
                     continue
                 cells += [None] * (len(v1_labels) - len(cells))
