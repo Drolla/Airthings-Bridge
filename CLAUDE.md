@@ -4,9 +4,11 @@
 
 - Python 3.11 or later. Use 3.11 idioms and type hints on functions and
   methods (`str | None`, `list[str]`).
-- Respect PEP 8 (79 columns) and PEP 257 docstrings. Match the style of the
-  surrounding code.
-- Keep comments and documentation concise. Correct them, don't expand them.
+- Respect PEP 8, with lines of at most 100 characters, and PEP 257
+  docstrings. Match the style of the surrounding code.
+- Keep comments and docstrings concise. Don't state what the code already
+  makes evident; comment the why and non-obvious facts. Correct comments,
+  don't expand them.
 - `libs/logdb.py` is a verbatim copy of the phc logdb module
   (https://github.com/Drolla/phc/tree/main/phc/extensions/logdb), and
   `tests/test_logdb.py` of its tests. The only local changes are the module
