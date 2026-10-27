@@ -1,5 +1,6 @@
 """Tests for airthings.wave_plus, with an emulated bleak BLE library."""
 
+import asyncio
 import struct
 from unittest import mock
 
@@ -86,12 +87,15 @@ def emulated_bleak(monkeypatch):
     monkeypatch.setattr(waveplus.WavePlus, "_sn2addr", {})
     monkeypatch.setattr(waveplus._WavePlusControl, "cache",
                         waveplus.time_cache.TimeCache())
-    monkeypatch.setattr(waveplus.time, "sleep", lambda _: None)
     _Scanner.advertisements = [
         ("11:22:33:44:55:66", _advertisement(2931111111)),
         ("00:00:00:00:00:00", _advertisement(2932222222, company_id=0x0001)),
         (ADDRESS, _advertisement(int(SN)))]
     _Client.instances = []
+
+
+def _read(device, retries=3):
+    return asyncio.run(device.read(retries=retries, retry_delay=0))
 
 
 def test_parse_serial_number():
@@ -102,7 +106,7 @@ def test_parse_serial_number():
 
 
 def test_get_reads_sensor_and_control_data():
-    assert waveplus.WavePlus(SN, "office").get() == {
+    assert _read(waveplus.WavePlus(SN, "office")) == {
         "humidity": 45.0, "radon_st": 33, "radon_lt": 44,
         "temperature": 21.5, "pressure": 980.0, "co2": 600.0, "voc": 120.0,
         "illuminance": 12, "battery": 75}
@@ -112,14 +116,14 @@ def test_get_reads_sensor_and_control_data():
 
 
 def test_discovery_caches_all_wave_plus_devices():
-    waveplus.WavePlus(SN).get()
+    _read(waveplus.WavePlus(SN))
     assert waveplus.WavePlus._sn2addr == {
         "2931111111": "11:22:33:44:55:66", SN: ADDRESS}
 
 
 def test_control_data_is_cached():
-    waveplus.WavePlus(SN).get()
-    waveplus.WavePlus(SN).get()
+    _read(waveplus.WavePlus(SN))
+    _read(waveplus.WavePlus(SN))
     assert len(_Client.instances[0].writes) == 1
     assert len(_Client.instances[1].writes) == 0
 
@@ -141,11 +145,11 @@ def test_control_data_check(data, message):
 
 def test_unknown_device_raises_after_retries():
     with pytest.raises(DeviceError, match="Failed to communicate"):
-        waveplus.WavePlus("2930000000").get(retries=2)
+        _read(waveplus.WavePlus("2930000000"), retries=2)
 
 
 def test_incomplete_indication_raises_after_retries(monkeypatch):
     monkeypatch.setattr(_Client, "chunks", [CONTROL_DATA[:20]])
     with pytest.raises(DeviceError):
-        waveplus.WavePlus(SN).get(retries=1)
+        _read(waveplus.WavePlus(SN), retries=1)
     assert len(_Client.instances) == 2

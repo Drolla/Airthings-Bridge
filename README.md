@@ -681,7 +681,6 @@ application and the modules, together with their default logging level:
 * airthings_bridge.consumers.sensorlog : sensorlog module logger
 * airthings_bridge.consumers.mqtt : MQTT publisher logger
 * airthings_bridge.mail : mail module logger
-* airthings_bridge.performancecheck : performancecheck module logger
 
 If a log file is provided via the '--log' option of the main application or by
 the YAML configuration file, a file handler is used to write log data.
@@ -725,7 +724,6 @@ log:
       # airthings_bridge.consumers.sensorlog:
       # airthings_bridge.consumers.mqtt:
       # airthings_bridge.mail:
-      # airthings_bridge.performancecheck:
 ```
 
 For each module, a dedicated logging level can be selected out of the following

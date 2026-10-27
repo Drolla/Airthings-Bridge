@@ -2,8 +2,7 @@
 
 This file adapts the logging database (logdb module) to the Airthings Bridge:
 It logs the sensor data of multiple devices, provides the logged data in CSV
-format for the web graphs, protects the database against concurrent accesses
-of the HTTP server threads, and converts CSV files of the previous logging
+format for the web graphs, and converts CSV files of the previous logging
 database format (version 1, Wave Plus Bridge 1.x).
 
 Copyright (C) 2026 Andreas Drollinger
@@ -14,11 +13,11 @@ this file, and for a DISCLAIMER OF ALL WARRANTIES.
 import logging
 import math
 import re
-import threading
 import time
 from pathlib import Path
 
 from airthings_bridge.logdb import LogDb
+from airthings_bridge.readings import Cycle
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +26,7 @@ _V1_INFO_LINE_PREFIX = "logdbcsv,"
 
 
 class SensorLog:
-    """Thread safe sensor data log.
+    """Sensor data log, and consumer that logs the readings of each cycle.
 
     The labels of the logged data are composed by the device names and the
     sensor names, separated by ':' (e.g. "my_office:temperature").
@@ -48,18 +47,26 @@ class SensorLog:
                   for sensor in sensors]
         if self._is_v1_file(file):
             self._convert_v1_file(file, labels)
-        self._lock = threading.Lock()
         self._db = LogDb(file, labels, max_age=retention)
         self._label_set = set(self._db.labels)
 
     def close(self) -> None:
         """Close the CSV file."""
-        with self._lock:
-            self._db.close()
+        self._db.close()
 
     def __len__(self) -> int:
-        with self._lock:
-            return len(self._db)
+        return len(self._db)
+
+    async def start(self) -> None:
+        """Nothing to start, the CSV file is opened by the constructor."""
+
+    async def handle(self, cycle: Cycle) -> None:
+        """Log the readings of a cycle."""
+        self.log(int(cycle.timestamp), cycle.values())
+
+    async def stop(self) -> None:
+        """Close the CSV file."""
+        self.close()
 
     @property
     def labels(self) -> list[str]:
@@ -81,8 +88,7 @@ class SensorLog:
                         isinstance(value, int | float) and \
                         not isinstance(value, bool):
                     values[label] = value
-        with self._lock:
-            self._db.log(timestamp, values)
+        self._db.log(timestamp, values)
 
     def get_labels(self, label_patterns: str | list[str]) -> list[str]:
         """Get the labels that match one of the regular expression patterns.
@@ -119,8 +125,7 @@ class SensorLog:
         missing values empty.
         """
         labels = self.get_labels(label_patterns)
-        with self._lock:
-            rows = self._db.get_decimated(labels, decimations)
+        rows = self._db.get_decimated(labels, decimations)
         csv_lines = [",".join(["Time", *labels])]
         for row in rows:
             csv_lines.append(",".join([

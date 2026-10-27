@@ -49,11 +49,8 @@ class WavePlus:
             "voc": EmulatedSensor(20, 1000),
         }
 
-    def stop(self) -> None:
-        pass
-
-    def get(self, retries: int = 3,
-            retry_delay: float = 1.0) -> dict[str, float]:
+    async def read(self, retries: int = 3,
+                   retry_delay: float = 1.0) -> dict[str, float]:
         """Get the emulated sensor data."""
         logger.debug("Reading sensor data for device %s", self.name)
         return {key: sensor.get() for key, sensor in self._sensors.items()}
