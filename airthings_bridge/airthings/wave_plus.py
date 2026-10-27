@@ -14,9 +14,9 @@ this file, and for a DISCLAIMER OF ALL WARRANTIES.
 # pylint: disable=broad-except
 
 import asyncio
+import contextlib
 import logging
 import struct
-import time
 
 from bleak import BleakClient, BleakScanner
 from bleak.backends.characteristic import BleakGATTCharacteristic
@@ -206,10 +206,10 @@ class WavePlus:
 
         wp_device = waveplus.WavePlus(serial_number, my_sensor_name)
 
-    The sensor data is provided by the get() method that handles
+    The sensor data is provided by the read() coroutine that handles
     also the connection to the device:
 
-        wp_device.get()
+        await wp_device.read()
 
     The returned sensor data is returned in form of a dictionary.
 
@@ -231,13 +231,6 @@ class WavePlus:
         # serial number.
         self._sn = str(serial_number)
         self._name = name if name != "" else str(serial_number)
-
-    def stop(self) -> None:
-        """Stop the BLE connection to the device.
-
-        The connection is only open while the data is read, so there is
-        nothing to do. The method is kept for compatibility reasons.
-        """
 
     async def _discover(self) -> str:
         """Discover the device defined via the serial number.
@@ -274,7 +267,7 @@ class WavePlus:
                         "Could not find device " + self._sn) from None
         return WavePlus._sn2addr[self._sn]
 
-    async def _read(self) -> dict[str, float | str]:
+    async def _read_once(self) -> dict[str, float | str]:
         """Connect to the device and read the sensor and control data."""
         address = await self._discover()
         logger.debug("Connect to %s (%s)", self._sn, address)
@@ -285,8 +278,8 @@ class WavePlus:
         logger.debug("  -> s=%s, c=%s", sensor_data, control_data)
         return {**sensor_data, **control_data}
 
-    def get(self, retries: int = 3,
-            retry_delay: float = 1.0) -> dict[str, float | str]:
+    async def read(self, retries: int = 3,
+                   retry_delay: float = 1.0) -> dict[str, float | str]:
         """Return the sensor data, the battery level and the illuminance.
 
         This method connects to the device, reads the raw sensor data and
@@ -304,7 +297,7 @@ class WavePlus:
 
         for attempt in range(1, retries + 2):
             try:
-                return asyncio.run(self._read())
+                return await self._read_once()
             except Exception as error:
                 logger.warning("Failed to communicate with device "
                                "%s (attempt %s of %s): %s",
@@ -312,7 +305,7 @@ class WavePlus:
                 logger.debug("  Stack trace:", exc_info=True)
             if attempt <= retries:
                 logger.debug("Retrying in %s seconds", retry_delay)
-                time.sleep(retry_delay)
+                await asyncio.sleep(retry_delay)
 
         raise DeviceError(
             f"Failed to communicate with device {self._sn}/{self._name}")
@@ -342,63 +335,34 @@ class WavePlus:
         return self._name
 
 
-#############################################
-# Main
-#############################################
+async def _demo(period: float, serial_numbers: list[str]) -> None:
+    """Read the devices repeatedly and log the values as table."""
+    wp_devices = [WavePlus(serial_n) for serial_n in serial_numbers]
+    keys = WavePlus.get_keys()
+    log_separator = "+" + ((("-" * 12) + "+") * (len(keys)+1))
+    log_format = log_separator + "\n|" + ("{:>12}|" * (len(keys)+1)) + "\n" + log_separator
+    logger.info(log_format.format("Device", *keys))
+    while True:
+        for wp_device in wp_devices:
+            try:
+                device_data = await wp_device.read()
+                device_values = [device_data.get(key, "") for key in keys]
+                logger.info(log_format.format(wp_device.name, *device_values))
+            except DeviceError as err:
+                logger.error("%s", err)
+        await asyncio.sleep(period)
+
 
 if __name__ == "__main__":
     import sys
 
-    def help_and_exit() -> None:
-        print("Usage: waveplus.py <period> "
-              "<serial_number_1> [serial_number_2] ..")
-        sys.exit(1)
-
-    # Configure the logger
     logger.setLevel(logging.DEBUG)
-    log_handler = logging.StreamHandler()
-    log_handler.setLevel(logging.DEBUG)
-    logger.addHandler(log_handler)
+    logger.addHandler(logging.StreamHandler())
 
-    # Handle the arguments (1: sensor read period, 2..: serial numbers)
-    if len(sys.argv) < 3 or not sys.argv[1].isdigit():
-        help_and_exit()
-    period = int(sys.argv[1])
-    serial_numbers = []
-    for serial_n in sys.argv[2:]:
-        if not serial_n.isdigit() or len(serial_n) != 10:
-            help_and_exit()
-        serial_numbers.append(serial_n)
-
-    # Setup the devices
-    wp_devices = []
-    for serial_n in serial_numbers:
-        logger.info("Setup device %s", serial_n)
-        wp_devices.append(WavePlus(serial_n))
-
+    if len(sys.argv) < 3 or not sys.argv[1].isdigit() or \
+            not all(sn.isdigit() and len(sn) == 10 for sn in sys.argv[2:]):
+        sys.exit("Usage: python -m airthings_bridge.airthings.wave_plus "
+                 "<period> <serial_number_1> [serial_number_2] ..")
     logger.info("Entering into sensor read loop. Exit with Ctrl+C")
-
-    # Print the table header that includes all sensor names
-    keys = WavePlus.get_keys()
-    log_separator = "+" + ((("-" * 12) + "+") * (len(keys)+1))
-    log_format = log_separator + "\n|" + \
-        ("{:>12}|" * (len(keys)+1)) + "\n" + log_separator
-    logger.info(log_format.format("Device", *keys))
-
-    # Infinite loop where all sensors are repeatedly read
-    try:
-        while True:
-            for wp_device in wp_devices:
-                try:
-                    device_data = wp_device.get()
-                    device_values = [device_data.get(key, "") for key in keys]
-                    logger.info(
-                            log_format.format(wp_device.name, *device_values))
-                except DeviceError as err:
-                    logger.error("Failed to communicate with device %s: %s",
-                                 wp_device.name, err)
-            time.sleep(period)
-    except KeyboardInterrupt:
-        pass
-
-    logger.warning("waveplus ended")
+    with contextlib.suppress(KeyboardInterrupt):
+        asyncio.run(_demo(int(sys.argv[1]), sys.argv[2:]))

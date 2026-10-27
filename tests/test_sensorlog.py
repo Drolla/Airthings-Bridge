@@ -1,12 +1,13 @@
 """Tests for consumers.sensorlog: the Airthings Bridge adapter of logdb."""
 
+import asyncio
 import fnmatch
-import threading
 import time
 
 import pytest
 
 from airthings_bridge.consumers.sensorlog import SensorLog
+from airthings_bridge.readings import Cycle, Reading
 
 LABEL_SPECS = {"office": ["temperature", "humidity"],
                "living": ["temperature", "radon_st"]}
@@ -104,26 +105,14 @@ def test_csv_decimation_averages_older_data(sensor_log):
         ["0.5", "2.5", "4.5", "6", "7", "8", "9"]
 
 
-# ---------- thread safety ----------
+# ---------- consumer ----------
 
-def test_concurrent_csv_reads_while_logging_and_trimming(tmp_path):
-    log = SensorLog(tmp_path / "log.csv", LABEL_SPECS, retention=50)
-    errors = []
-
-    def read():
-        try:
-            for _ in range(200):
-                log.get_csv(".*", [(20.0, 3)])
-        except Exception as err:
-            errors.append(err)
-
-    reader = threading.Thread(target=read)
-    reader.start()
-    for t in range(5000):
-        log.log(t, {"office": {"temperature": t % 30}})
-    reader.join()
-    log.close()
-    assert errors == []
+def test_handle_logs_the_cycle_readings(sensor_log):
+    cycle = Cycle(1000, (Reading("office", {"temperature": 21.5}, 1001),
+                         Reading("living", {})))
+    asyncio.run(sensor_log.handle(cycle))
+    assert sensor_log.get_csv("office:temperature").splitlines()[1:] == [
+        f"{_time_str(1000)},21.5"]
 
 
 # ---------- version 1 file conversion ----------

@@ -6,12 +6,15 @@ file, and for a DISCLAIMER OF ALL WARRANTIES.
 """
 
 import argparse
+import asyncio
+import contextlib
 import logging
-import signal
 import sys
-from types import FrameType
+from collections.abc import Coroutine
+from typing import Any
 
-from airthings_bridge import __version__, bridge
+from airthings_bridge import __version__
+from airthings_bridge.bridge import Bridge
 from airthings_bridge.config import load_config
 from airthings_bridge.errors import BridgeError, ConfigError
 from airthings_bridge.logging_setup import configure_logging
@@ -48,14 +51,18 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def run(coro: Coroutine[Any, Any, None]) -> None:
+    """Run a coroutine in a new event loop. Ctrl+C ends it silently."""
+    # aiomqtt (paho-mqtt) requires add_reader(), which the default Windows
+    # event loop doesn't provide
+    loop_factory = asyncio.SelectorEventLoop if sys.platform == "win32" else None
+    with contextlib.suppress(KeyboardInterrupt), \
+            asyncio.Runner(loop_factory=loop_factory) as runner:
+        runner.run(coro)
+
+
 def main(argv: list[str] | None = None) -> None:
     """Run the Airthings Bridge."""
-    def handle_exit(sig: int, frame: FrameType | None) -> None:
-        raise SystemExit()
-
-    signal.signal(signal.SIGINT, handle_exit)
-    signal.signal(signal.SIGTERM, handle_exit)
-
     args = vars(parse_arguments(argv))
     try:
         config = load_config(args.pop("config"), args)
@@ -64,7 +71,7 @@ def main(argv: list[str] | None = None) -> None:
 
     configure_logging(config.log, verbose=config.port is None)
     try:
-        bridge.run(config)
+        run(Bridge(config).run())
     except (BridgeError, OSError) as err:
         logger.critical("%s", err)
         logger.debug("Stack trace:", exc_info=True)
