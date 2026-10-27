@@ -9,7 +9,7 @@ See the file "LICENSE" for information on usage and redistribution of
 this file, and for a DISCLAIMER OF ALL WARRANTIES.
 """
 
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import ThreadingHTTPServer
 from socketserver import BaseRequestHandler
 from threading import Thread
 
@@ -41,33 +41,3 @@ class ThreadedHTTPServer(ThreadingHTTPServer):
         finally:
             self.server_close()
 
-
-#############################################
-# Main
-#############################################
-
-if __name__ == "__main__":
-    import time
-
-    # Change the following line to select a different port number
-    DEMO_PORT_NUMBER = 8000
-
-    # This class handles any incoming request from the browser
-    class MyHandler(BaseHTTPRequestHandler):
-        # Handler for the GET requests
-        def do_GET(self) -> None:
-            self.send_response(200)
-            self.send_header('Content-type', 'text/html')
-            self.end_headers()
-            self.wfile.write(
-                    bytes("Hello World !<br>Time: " + str(int(time.time())),
-                          "utf8"))
-
-    # Create the threaded server
-    print('Starting HTTP server at port', DEMO_PORT_NUMBER, flush=True)
-    server = ThreadedHTTPServer(('', DEMO_PORT_NUMBER), MyHandler)
-
-    # Stay in the wait loop
-    while True:
-        print('.', end='', flush=True)
-        time.sleep(0.05)

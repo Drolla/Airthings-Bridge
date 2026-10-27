@@ -27,7 +27,7 @@ class PerformanceCheck:
                    Default=logging.INFO
 
     Example:
-        from libs.performancecheck import PerformanceCheck
+        from airthings_bridge.performancecheck import PerformanceCheck
 
         with PerformanceCheck("Test loop"):
             value = 1.0
@@ -53,22 +53,3 @@ class PerformanceCheck:
         logger.log(self.log_level, "%s: %.3fms",
                    self.task_short_name, execution_time_ms)
 
-
-#############################################
-# Main
-#############################################
-
-if __name__ == "__main__":
-    logger.setLevel(logging.DEBUG)
-    log_handler = logging.StreamHandler()
-    log_handler.setLevel(logging.DEBUG)
-    logger.addHandler(log_handler)
-
-    # Do some stuff within the performance checker. This will report the
-    # execution time of the with block.
-    with PerformanceCheck("Test loop"):
-        value = 1.0
-        for _ in range(1000000):
-            value = value*1.1
-            if value > 1000:
-                value /= 1000

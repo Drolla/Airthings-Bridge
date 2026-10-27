@@ -1,4 +1,4 @@
-"""Tests for libs.logdb: the CSV-backed, in-memory-buffered
+"""Tests for airthings_bridge.logdb: the CSV-backed, in-memory-buffered
 LogDb storage engine (in isolation from the extension/task-wiring layer)."""
 
 import logging
@@ -6,7 +6,7 @@ import math
 
 import pytest
 
-from libs.logdb import LogDb
+from airthings_bridge.logdb import LogDb
 
 
 def _csv_path(tmp_path):
@@ -15,15 +15,15 @@ def _csv_path(tmp_path):
 
 @pytest.fixture
 def logdb_log(caplog):
-    """caplog, but attached directly to the "libs.logdb" logger, bypassing
+    """caplog, but attached directly to the "airthings_bridge.logdb" logger, bypassing
     propagate=False set by configure_logging() (invoked via load_system()
     in other tests in this session) -- see tests/test_task.py's task_log
     fixture for the same pattern."""
-    logdb_logger = logging.getLogger("libs.logdb")
+    logdb_logger = logging.getLogger("airthings_bridge.logdb")
     logdb_logger.addHandler(caplog.handler)
     logdb_logger.setLevel(logging.WARNING)
     try:
-        with caplog.at_level("WARNING", logger="libs.logdb"):
+        with caplog.at_level("WARNING", logger="airthings_bridge.logdb"):
             yield caplog
     finally:
         logdb_logger.removeHandler(caplog.handler)
@@ -370,7 +370,7 @@ def test_restore_honors_max_records(tmp_path):
 
 
 def test_restore_across_forced_multi_chunk_backward_read(tmp_path, monkeypatch):
-    import libs.logdb as logdb_module
+    import airthings_bridge.logdb as logdb_module
     monkeypatch.setattr(logdb_module, "_INITIAL_CHUNK_SIZE", 64)
 
     path = _csv_path(tmp_path)
@@ -390,7 +390,7 @@ def test_restore_across_forced_multi_chunk_backward_read(tmp_path, monkeypatch):
 def test_restore_honors_max_age_across_multi_chunk_backward_read(tmp_path, monkeypatch):
     # Regression: the backward scan stopped at its first chunk whenever
     # that chunk's anchor was younger than max_age, restoring only it.
-    import libs.logdb as logdb_module
+    import airthings_bridge.logdb as logdb_module
     monkeypatch.setattr(logdb_module, "_INITIAL_CHUNK_SIZE", 64)
     monkeypatch.setattr(logdb_module.time, "time", lambda: 1000.0)
 

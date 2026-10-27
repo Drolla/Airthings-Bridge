@@ -1,4 +1,4 @@
-"""Tests for libs.sensorlog: the Wave Plus Bridge adapter of logdb."""
+"""Tests for consumers.sensorlog: the Airthings Bridge adapter of logdb."""
 
 import fnmatch
 import threading
@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from libs.sensorlog import SensorLog, parse_decimations
+from airthings_bridge.consumers.sensorlog import SensorLog, parse_decimations
 
 LABEL_SPECS = {"office": ["temperature", "humidity"],
                "living": ["temperature", "radon_st"]}

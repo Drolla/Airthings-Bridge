@@ -1,6 +1,6 @@
 """Sensor data log.
 
-This file adapts the logging database (logdb module) to the Wave Plus Bridge:
+This file adapts the logging database (logdb module) to the Airthings Bridge:
 It logs the sensor data of multiple devices, provides the logged data in CSV
 format for the web graphs, protects the database against concurrent accesses
 of the HTTP server threads, and converts CSV files of the previous logging
@@ -18,10 +18,7 @@ import threading
 import time
 from pathlib import Path
 
-try:
-    from libs.logdb import LogDb
-except ImportError:
-    from logdb import LogDb
+from airthings_bridge.logdb import LogDb
 
 logger = logging.getLogger(__name__)
 

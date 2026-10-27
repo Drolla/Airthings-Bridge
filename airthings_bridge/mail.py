@@ -7,7 +7,7 @@ Eventual connection issues to the SMTP mail server can be debugged by running
 this module standalone. Comprehensive information about how running the script
 is provided via the '-h' option:
 
-Usage: threadedsendmail.py [-h] [--port PORT] [--security SECURITY]
+Usage: mail.py [-h] [--port PORT] [--security SECURITY]
                            [--user USER] [--password PASSWORD]
                            [--subject SUBJECT] [--message MESSAGE]
                            [--debug_level DEBUG_LEVEL] --server SERVER --to TO
@@ -30,7 +30,7 @@ Required named arguments:
   --from FROM           From address
 
 Example:
-    python ../libs/threadedsendmail.py \
+    python -m airthings_bridge.mail \
         --server mail.server.com --port 465 --security SSL \
         --user wave@plus.com --password bridge123 \
         --from wave.plus@myhome.com --to olivia.brown@family.com \

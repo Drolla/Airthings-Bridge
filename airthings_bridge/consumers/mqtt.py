@@ -1,9 +1,6 @@
-"""Threaded MQTT client to publish messages.
+"""MQTT publishing of the sensor data.
 
-This file implements a threaded MQTT client class. It is based on the
-threadding support provided by the paho.mqtt.client module.
-
-Copyright (C) 2023 Andreas Drollinger
+Copyright (C) 2023-2026 Andreas Drollinger
 See the file "LICENSE" for information on usage and redistribution of
 this file, and for a DISCLAIMER OF ALL WARRANTIES.
 """
@@ -14,6 +11,8 @@ import time
 from typing import Any
 
 import paho.mqtt.client as mqtt_client
+
+from airthings_bridge.readings import SensorData
 
 logger = logging.getLogger(__name__)
 
@@ -200,127 +199,86 @@ class ThreadedMqttPublisher:
         return publish_result
 
 
-#############################################
-# Main
-#############################################
 
-# Small module demo that can also be used to check the connection to the
-# MQTT server.
+class MqttPublisher:
+    """MQTT publisher of the sensor data, configured by the 'mqtt' section."""
 
-if __name__ == "__main__":
-    import argparse
-    import yaml
-    import textwrap
+    # Maximum time in seconds to wait on the publication of the 'Offline'
+    # status when the publisher is stopped
+    STOP_TIMEOUT = 5
 
-    class DescriptionHelpFormatter(argparse.RawDescriptionHelpFormatter):
-        def _fill_text(self, text: str, width: int, indent: str) -> str:
-            return textwrap.dedent(text)
+    def __init__(self, config: dict[str, Any]):
+        self.mqtt_publisher = None
 
-    # Define and parse the arguments
-    parser = argparse.ArgumentParser(
-            formatter_class=DescriptionHelpFormatter,
-            description="ThreadedMqttPublisher demo and test application",
-            epilog="""
-                Remark:
-                    Dicts have to be provided in YAML format (auth, tls, will).
+        self.cfg_topic = config.get("topic", "")
+        self.cfg_publish = config["publish"]
+        self.status_topic = "/".join(filter(bool, [self.cfg_topic, "status"]))
+        will = {"topic": self.status_topic, "payload": "Connection lost",
+                "retain": True}
 
-                Example:
-                    python threadedmqttpublisher.py \\
-                        --host test.mosquitto.org --port 1883 \\
-                        --topic my_nice_home/waveplus_bridge \\
-                        --will "{topic: my_nice_home/waveplus_bridge/status, \\
-                                 payload: Offline}"
-                        "{status: Online}" \\
-                        "{humidity: 61.5, radon_st: 35, temperature: 18.5}" \\
-                        "{humidity: 66.5, radon_st: 38, temperature: 23.5}"
-            """
-    )
-
-    parser.add_argument(
-            "--port", type=int, default=1883,
-            help="MQTT broker host port, default=1883")
-    parser.add_argument(
-            "--client_id", type=str, default="", help="Client ID")
-    parser.add_argument(
-            "--auth", type=str, default=None,
-            help="Dict containing authentication parameters: "
-                 "{username: <username>, password: <password>}")
-    parser.add_argument(
-            "--tls", type=str, default=None,
-            help="Dict containing client TLS configuration parameters: "
-                 "{ca_certs: <ca_certs>, certfile: <certfile>, "
-                 "keyfile: <keyfile>, tls_version: <tls_version>,"
-                 "ciphers: <ciphers>, insecure: <bool>}")
-    parser.add_argument(
-            "--will", type=str, default=None,
-            help="Dict containing will parameters for the client: "
-                 "{topic: <topic>, payload: <payload>, qos: <qos>, "
-                 "retain=True")
-    parser.add_argument(
-            "--debug_level", type=int, default=1,
-            help="debug level. 0=no debug info, 3=max level of debug info")
-
-    required_args = parser.add_argument_group('required named arguments')
-
-    required_args.add_argument(
-            "--host", type=str, help="MQTT broker host address", required=True)
-    required_args.add_argument(
-            "--topic_root", type=str, help="MQTT topic root", required=True)
-    parser.add_argument(
-            'message_dicts', metavar='message_dicts', type=str, nargs='+',
-            help='Message dict: {<topic1>: <msg1>,..,<topic2>: <msg2>}')
-    config = vars(parser.parse_args())
-
-    # Configure the logger
-    if config["debug_level"]:
-        log_formatter = logging.Formatter(
-                '%(name)s - %(levelname)s - %(message)s')
-        log_handler = logging.StreamHandler()
-        log_handler.setLevel(logging.DEBUG)
-        log_handler.setFormatter(log_formatter)
-        logger.addHandler(log_handler)
-        logger.setLevel(logging.INFO)
-    if config["debug_level"] > 1:
-        logger.setLevel(logging.DEBUG)
-    if config["debug_level"] > 2:
-        mqtt_logger = logging.getLogger("paho.mqtt.client")
-        mqtt_logger.addHandler(log_handler)
-        mqtt_logger.setLevel(logging.DEBUG)
-
-    # Argument processing
-    logger.info("Parse arguments provided in Yaml format")
-    for dict_var_index in ("auth", "tls", "will"):
-        if config[dict_var_index] is not None:
-            config[dict_var_index] = yaml.load(config[dict_var_index],
-                                               Loader=yaml.SafeLoader)
-    # Launch ThreadedMqttPublisher
-    logger.info("Start ThreadedMqttPublisher:")
-    for cfg_index in config:
-        logger.info("  %s: %s", cfg_index, str(config[cfg_index]))
-
-    mqtt_publisher = ThreadedMqttPublisher(
+        self.mqtt_publisher = ThreadedMqttPublisher(
             hostname=config["host"],
-            port=config["port"],
-            client_id=config["client_id"],
-            auth=config["auth"],
-            tls=config["tls"],
-            will=config["will"]
-    )
-    time.sleep(1)
+            port=config.get("port", 1883),
+            client_id=config.get("client_id"),
+            auth=config.get("auth"),
+            tls=config.get("tls"),
+            will=config.get("will", will)
+        )
 
-    # Publish all the data
-    for message_str in config["message_dicts"]:
-        logger.info("Publish data: %s ...", message_str)
-        messages = []
-        for topic, payload in yaml.load(message_str,
-                                        Loader=yaml.SafeLoader).items():
-            messages.append({"topic": topic, "payload": payload})
-        mqtt_publisher.publish_multiple(messages, config["topic_root"])
-        logger.info("... done")
-        time.sleep(3)
+        # Wait until the thread is created
+        time.sleep(1)
+        self.mqtt_publisher.publish_single(
+            topic=self.status_topic, payload="Online", qos=2, retain=True)
 
-    logger.info("Disconnect")
-    mqtt_publisher.stop()
-    time.sleep(2)
+    def stop(self) -> None:
+        """Publish the 'Offline' status and disconnect.
 
-    logger.info("Exit")
+        The publisher cannot be restarted.
+        """
+        if self.mqtt_publisher is None:
+            return
+
+        publish_result = self.mqtt_publisher.publish_single(
+            topic=self.status_topic, payload="Offline", qos=2, retain=True)
+        try:
+            publish_result.wait_for_publish(timeout=self.STOP_TIMEOUT)
+        except (ValueError, RuntimeError) as err:
+            logger.warning("Unable to publish the 'Offline' status: %s", err)
+
+        self.mqtt_publisher.stop()
+        self.mqtt_publisher = None
+
+    def __del__(self) -> None:
+        self.stop()
+
+    def publish(self, data: SensorData) -> None:
+        """Publish the sensor data selected by the 'publish' configuration."""
+        mqtt_messages = []
+        for device, device_data in data.items():
+            if device in self.cfg_publish:
+                sensor_filter = self.cfg_publish[device]
+            elif "*" in self.cfg_publish:
+                sensor_filter = self.cfg_publish["*"]
+            else:
+                continue
+
+            mqtt_messages.append({
+                "topic": "/".join([device, "status"]),
+                "payload": "Online" if device_data else "Offline",
+                "retain": True
+            })
+
+            for sensor, value in device_data.items():
+                if sensor not in sensor_filter and                         "*" not in sensor_filter:
+                    continue
+                mqtt_messages.append({
+                    "topic": "/".join([device, sensor]),
+                    "payload": value,
+                    "retain": True
+                })
+        mqtt_messages.append({"topic": "publish_time",
+                              "payload": int(time.time()),
+                              "retain": True})
+
+        self.mqtt_publisher.publish_multiple(
+                mqtt_messages, topic_root=self.cfg_topic)

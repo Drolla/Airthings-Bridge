@@ -5,12 +5,10 @@ See the file "LICENSE" for information on usage and redistribution of
 this file, and for a DISCLAIMER OF ALL WARRANTIES.
 """
 
-import sys
 import time
 import unittest
 
-sys.path.append("../libs")
-from trigger import Trigger  # noqa: E402
+from airthings_bridge.trigger import Trigger
 
 
 def s2ivstr(seconds):

@@ -1,4 +1,7 @@
 __pycache__/
 .pytest_cache/
 .ruff_cache/
-tests/tmp_test_logdb/
+.mypy_cache/
+*.egg-info/
+build/
+dist/

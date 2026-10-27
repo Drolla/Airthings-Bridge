@@ -1,7 +1,7 @@
 /*************************************************************************
-* Airthings Wave Plus bridge to Wifi/LAN
+* Airthings Bridge
 **************************************************************************
-* waveplus_bridge.js - Wave Plus bridge JavaScript AJAX module
+* airthings_bridge.js - Web UI
 * 
 * Copyright (C) 2020 Andreas Drollinger
 *************************************************************************/
