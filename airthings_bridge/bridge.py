@@ -42,9 +42,8 @@ class Bridge:
         self.devices: list[AirthingsDevice | EmulatedDevice] = []
         for device_config in config.devices:
             device = create_device(device_config.serial, device_config.name)
-            if config.emulation:
-                device = EmulatedDevice(type(device), device.serial, device.name)
-            self.devices.append(device)
+            self.devices.append(EmulatedDevice(type(device), device.serial, device.name)
+                                if config.emulation else device)
 
     @staticmethod
     def model(device: AirthingsDevice | EmulatedDevice) -> type[AirthingsDevice]:

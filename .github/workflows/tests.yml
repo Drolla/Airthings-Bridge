@@ -1,0 +1,85 @@
+name: Tests
+
+"on":
+  push:
+    branches: [master, "version-*"]
+  pull_request:
+    branches: [master]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install package with dev extras
+        run: pip install -e ".[dev]"
+
+      - name: Run test suite
+        run: pytest
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install package with dev extras
+        run: pip install -e ".[dev]"
+
+      - name: ruff
+        run: ruff check .
+
+      - name: mypy
+        run: mypy
+
+  # The tests run against the source tree and can't detect packaging
+  # mistakes, like missing web UI files in the wheel.
+  wheel-install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Build wheel
+        run: |
+          pip install build
+          python -m build --wheel
+
+      - name: Install the wheel into a clean venv
+        run: |
+          python -m venv /tmp/venv
+          /tmp/venv/bin/pip install dist/*.whl
+          /tmp/venv/bin/airthings-bridge --version
+
+      - name: Run the bridge from outside the source tree
+        run: |
+          mkdir -p /tmp/run
+          cd /tmp/run
+          /tmp/venv/bin/airthings-bridge "2930123456, office" "3250123456, cellar" \
+              --emulation --port 8080 --csv log.csv --log run.log &
+          sleep 5
+          curl -sf http://127.0.0.1:8080/meta | grep -q "Corentium Home 2"
+          curl -sf http://127.0.0.1:8080/ui/index.html | grep -q "Airthings Bridge"
+          curl -sf http://127.0.0.1:8080/ui/dygraph.min.js > /dev/null
+          curl -sf "http://127.0.0.1:8080/csv?*:temperature" | grep -q "office:temperature"
+          kill -TERM %1
+          wait %1
+          cat run.log
+          grep -q "Airthings Bridge ended" run.log

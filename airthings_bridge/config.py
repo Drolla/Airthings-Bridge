@@ -221,9 +221,9 @@ def _devices(sn_defs: Any) -> tuple[DeviceConfig, ...]:
     devices = []
     for sn_def in _as_list(sn_defs):
         m = re.fullmatch(r"\s*(\w*)[\s,:;]*(.*?)\s*", str(sn_def))
-        serial = m.group(1) if m else ""
-        if len(serial) != 10 or not serial.isdigit():
+        if m is None or len(m.group(1)) != 10 or not m.group(1).isdigit():
             raise ConfigError(f"sn: Invalid serial number '{sn_def}', 10 digits expected")
+        serial = m.group(1)
         if model_for_serial(serial) is None:
             raise ConfigError(f"sn: Unsupported device {serial}, see the supported devices")
         devices.append(DeviceConfig(serial, m.group(2) or serial))

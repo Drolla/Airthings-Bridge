@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff", "mypy"]
+dev = ["pytest", "ruff", "mypy", "types-PyYAML"]
 
 [project.scripts]
 airthings-bridge = "airthings_bridge.cli:main"
@@ -52,6 +52,16 @@ convention = "pep257"
 # Verbatim copies of the phc logdb module and its tests
 "airthings_bridge/logdb.py" = ["ALL"]
 "tests/test_logdb.py" = ["ALL"]
+
+[tool.mypy]
+files = ["airthings_bridge"]
+python_version = "3.11"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Verbatim copy of the phc logdb module
+module = "airthings_bridge.logdb"
+ignore_errors = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

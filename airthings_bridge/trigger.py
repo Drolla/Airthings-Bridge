@@ -100,11 +100,11 @@ class Trigger:
                                         else [action_functions]
 
         # Initialize the instance variables
-        self.first_trigger_time_above = [None]*len(self.above)
-        self.first_trigger_time_below = [None]*len(self.below)
+        self.first_trigger_time_above: list[float | None] = [None]*len(self.above)
+        self.first_trigger_time_below: list[float | None] = [None]*len(self.below)
         self.trigger_index_above = -1
         self.trigger_index_below = -1
-        self.last_alert_trigger = None
+        self.last_alert_trigger: float | None = None
 
     @staticmethod
     def _parse_time_span(time_span_str: str | float) -> float:
@@ -116,7 +116,7 @@ class Trigger:
             * Seconds
         """
         try:
-            t = datetime.datetime.strptime(time_span_str, "%H:%M:%S")
+            t = datetime.datetime.strptime(str(time_span_str), "%H:%M:%S")
             return datetime.timedelta(
                     hours=t.hour, minutes=t.minute,
                     seconds=t.second).total_seconds()
