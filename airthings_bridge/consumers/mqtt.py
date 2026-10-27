@@ -19,6 +19,21 @@ from airthings_bridge.readings import Cycle
 logger = logging.getLogger(__name__)
 
 
+def create_client(config: MqttConfig, will: dict[str, Any] | None = None) -> aiomqtt.Client:
+    """Create a client for the configured broker."""
+    tls_params = tls_insecure = None
+    if config.tls is not None:
+        tls = dict(config.tls)
+        tls_insecure = tls.pop("insecure", None)
+        tls_params = aiomqtt.TLSParameters(**tls)
+    auth = config.auth or {}
+    return aiomqtt.Client(
+        config.host, config.port, identifier=config.client_id,
+        username=auth.get("username"), password=auth.get("password"),
+        will=aiomqtt.Will(**will) if will else None, tls_params=tls_params,
+        tls_insecure=tls_insecure)
+
+
 class MqttPublisher:
     """MQTT consumer: publishes the selected sensor data of each cycle.
 
@@ -35,31 +50,18 @@ class MqttPublisher:
     def __init__(self, config: MqttConfig):
         self._config = config
         self._status_topic = self._topic("status")
+        self._will = config.will or {
+            "topic": self._status_topic, "payload": "Connection lost", "retain": True}
         self._client: aiomqtt.Client | None = None
         self._session: asyncio.Task[None] | None = None
 
     def _topic(self, *parts: str) -> str:
         return "/".join(filter(bool, [self._config.topic, *parts]))
 
-    def _create_client(self) -> aiomqtt.Client:
-        config = self._config
-        will = config.will or {"topic": self._status_topic, "payload": "Connection lost",
-                               "retain": True}
-        tls_params = tls_insecure = None
-        if config.tls is not None:
-            tls = dict(config.tls)
-            tls_insecure = tls.pop("insecure", None)
-            tls_params = aiomqtt.TLSParameters(**tls)
-        auth = config.auth or {}
-        return aiomqtt.Client(
-            config.host, config.port, identifier=config.client_id,
-            username=auth.get("username"), password=auth.get("password"),
-            will=aiomqtt.Will(**will), tls_params=tls_params, tls_insecure=tls_insecure)
-
     async def _run_session(self) -> None:
         while True:
             try:
-                async with self._create_client() as client:
+                async with create_client(self._config, self._will) as client:
                     logger.info("Connected to MQTT broker %s", self._config.host)
                     await client.publish(self._status_topic, "Online", qos=2, retain=True)
                     self._client = client
