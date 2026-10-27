@@ -29,6 +29,7 @@ class WebServer:
     Requests:
        * /: Redirect to /ui/index.html
        * /data: Current sensor data in JSON format
+       * /meta: Measurements and devices in JSON format, for the web UI
        * /csv: Sensor data history in CSV format, selected by glob patterns
          separated by ';' (/csv?*:temp*;*:hum*) or by a regular expression
          (/csv?re=...)
@@ -37,11 +38,12 @@ class WebServer:
          expression, with the eval_namespace variables
     """
 
-    def __init__(self, port: int, live: LiveState, sensor_log: SensorLog | None,
-                 decimations: list[tuple[float, int]], developer: bool = False,
-                 eval_namespace: dict[str, Any] | None = None):
+    def __init__(self, port: int, live: LiveState, meta: dict[str, Any],
+                 sensor_log: SensorLog | None, decimations: list[tuple[float, int]],
+                 developer: bool = False, eval_namespace: dict[str, Any] | None = None):
         self._port = port
         self._live = live
+        self._meta = meta
         self._sensor_log = sensor_log
         self._decimations = decimations
         self._eval_namespace = eval_namespace or {}
@@ -50,6 +52,7 @@ class WebServer:
         app = web.Application()
         app.router.add_get("/", self._root)
         app.router.add_get("/data", self._data)
+        app.router.add_get("/meta", self._meta_data)
         if sensor_log is not None:
             app.router.add_get("/csv", self._csv)
         app.router.add_static("/ui/", UI_DIR)
@@ -87,6 +90,9 @@ class WebServer:
 
     async def _data(self, request: web.Request) -> web.Response:
         return web.json_response(self._live.as_json())
+
+    async def _meta_data(self, request: web.Request) -> web.Response:
+        return web.json_response(self._meta)
 
     async def _csv(self, request: web.Request) -> web.Response:
         assert self._sensor_log is not None
