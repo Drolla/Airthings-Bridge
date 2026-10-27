@@ -12,6 +12,7 @@ from typing import Any
 
 import yaml
 
+from airthings_bridge.airthings import model_for_serial
 from airthings_bridge.errors import ConfigError
 from airthings_bridge.trigger import Trigger
 
@@ -214,7 +215,7 @@ def _port(value: Any, key: str) -> int | None:
 
 
 def _devices(sn_defs: Any) -> tuple[DeviceConfig, ...]:
-    """Parse the device definitions, e.g. "2931234567, cellar"."""
+    """Parse the device definitions, e.g. "2930123456, cellar"."""
     if not sn_defs:
         raise ConfigError("sn: No serial number provided")
     devices = []
@@ -223,6 +224,8 @@ def _devices(sn_defs: Any) -> tuple[DeviceConfig, ...]:
         serial = m.group(1) if m else ""
         if len(serial) != 10 or not serial.isdigit():
             raise ConfigError(f"sn: Invalid serial number '{sn_def}', 10 digits expected")
+        if model_for_serial(serial) is None:
+            raise ConfigError(f"sn: Unsupported device {serial}, see the supported devices")
         devices.append(DeviceConfig(serial, m.group(2) or serial))
     names = [d.name for d in devices]
     duplicates = sorted({n for n in names if names.count(n) > 1})
