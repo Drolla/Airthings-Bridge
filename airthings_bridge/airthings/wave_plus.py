@@ -23,10 +23,7 @@ from bleak.backends.characteristic import BleakGATTCharacteristic
 from bleak.backends.device import BLEDevice
 from bleak.backends.scanner import AdvertisementData
 
-try:
-    from libs import time_cache
-except ImportError:
-    import time_cache
+from airthings_bridge.airthings import time_cache
 
 logger = logging.getLogger(__name__)
 

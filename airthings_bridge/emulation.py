@@ -1,11 +1,8 @@
 """Airthings Wave Plus sensor reader emulation.
 
-The WavePlus class implemented in this file emulates the class of the same name
-provided in ../libs and used by the Wave Plus Bridge application. It is used
-for testing purposes and operates without Bluetooth LE (BLE) library and
-without connection of a real Wave Plus device. It is loaded if either the flag
-'--emulation' is provided to the application or the parameter 'emulation' is
-set to 'True' in the provided YAML configuration file.
+Emulates the WavePlus class of airthings.wave_plus without BLE access, for
+tests. It is used with the '--emulation' flag or the 'emulation: True'
+configuration.
 
 Copyright (C) 2020-2022 Andreas Drollinger
 See the file "LICENSE" for information on usage and redistribution of
@@ -17,10 +14,6 @@ import random
 
 logger = logging.getLogger(__name__)
 
-
-#############################################
-# Emulated sensor
-#############################################
 
 class EmulatedSensor:
     """Sensor emulation with a random walk between a minimum and maximum."""
@@ -39,10 +32,6 @@ class EmulatedSensor:
         self.value = max(self.min, min(self.max, self.value))
         return self.value
 
-
-#############################################
-# WavePlus test classes
-#############################################
 
 class WavePlus:
     """Emulation of the WavePlus class of the waveplus module."""
@@ -69,11 +58,3 @@ class WavePlus:
         logger.debug("Reading sensor data for device %s", self.name)
         return {key: sensor.get() for key, sensor in self._sensors.items()}
 
-
-if __name__ == "__main__":
-    wp = WavePlus(12345, "test_device")
-    print("Read 3 data records:")
-    print("  ", wp.get())
-    print("  ", wp.get())
-    print("  ", wp.get())
-    print("Done")

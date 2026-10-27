@@ -1,3 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "airthings-bridge"
+dynamic = ["version"]
+description = "Bridge from Airthings BLE sensors to HTTP, CSV logging, mail alerts and MQTT"
+readme = "README.md"
+license = {file = "LICENSE"}
+authors = [{name = "Andreas Drollinger"}]
+requires-python = ">=3.11"
+dependencies = [
+    "PyYAML>=6.0",
+    "bleak>=3.0",
+    "paho-mqtt>=2.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff", "mypy"]
+
+[project.scripts]
+airthings-bridge = "airthings_bridge.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Drolla/WavePlus_Bridge"
+
+[tool.setuptools.dynamic]
+version = {attr = "airthings_bridge.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["airthings_bridge*"]
+
+[tool.setuptools.package-data]
+"airthings_bridge.web" = ["static/*"]
+
 [tool.ruff]
 target-version = "py311"
 line-length = 100
@@ -11,11 +47,8 @@ convention = "pep257"
 
 [tool.ruff.lint.per-file-ignores]
 # Verbatim copies of the phc logdb module and its tests
-"libs/logdb.py" = ["ALL"]
+"airthings_bridge/logdb.py" = ["ALL"]
 "tests/test_logdb.py" = ["ALL"]
-# The Python version is checked before the other modules are imported
-"waveplus_bridge.py" = ["E402"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-python_files = ["test_*.py", "unittest_*.py"]

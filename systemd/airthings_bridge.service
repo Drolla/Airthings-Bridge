@@ -1,26 +1,26 @@
-# Wave Plus Bridge systemd service
+# Airthings Bridge systemd service
 #
-# Installation: See section 'Setup the Wave Plus Bridge as a Service' of
+# Installation: See section 'Setup the Airthings Bridge as a Service' of
 # README.md.
 
 [Unit]
-Description=Airthings Wave Plus Bridge
+Description=Airthings Bridge
 Wants=network-online.target
 After=bluetooth.target network-online.target
 
 [Service]
-ExecStart=/opt/waveplus_bridge/bin/python /opt/waveplus_bridge/waveplus_bridge.py --config /opt/waveplus_bridge/waveplus_bridge.yaml
+ExecStart=/opt/airthings_bridge/bin/airthings-bridge --config /opt/airthings_bridge/airthings_bridge.yaml
 Restart=on-failure
 RestartSec=10
 
 # Run as dedicated user with access to Bluetooth LE, allowed to open the
-# HTTP port 80, and with writable /var/lib/waveplus_bridge (CSV data) and
-# /var/log/waveplus_bridge (log file) directories.
-User=waveplus_bridge
+# HTTP port 80, and with writable /var/lib/airthings_bridge (CSV data) and
+# /var/log/airthings_bridge (log file) directories.
+User=airthings_bridge
 SupplementaryGroups=bluetooth
 AmbientCapabilities=CAP_NET_BIND_SERVICE
-StateDirectory=waveplus_bridge
-LogsDirectory=waveplus_bridge
+StateDirectory=airthings_bridge
+LogsDirectory=airthings_bridge
 
 [Install]
 WantedBy=multi-user.target

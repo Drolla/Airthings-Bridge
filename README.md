@@ -1,4 +1,4 @@
-# Airthings **Wave Plus Bridge** to Wifi/LAN and MQTT
+# **Airthings Bridge** to Wifi/LAN and MQTT
 
 This tool provides a bridge between one or multiple **Airthings Wave Plus** sensors and the **Wifi/LAN** network, using a **Raspberry Pi** that supports Bluetooth Low Energy (BLE). In detail, the bridge provides the following features:
  
@@ -22,19 +22,18 @@ The tool runs with Python 3.11 or later. It can be installed as a service that i
 * [Requirements](#requirements)
     * [Hardware Requirements](#hardware-requirements)
     * [Software Requirements](#software-requirements)
-* [Wave Plus Bridge Configuration](#wave-plus-bridge-configuration)
+* [Airthings Bridge Configuration](#airthings-bridge-configuration)
     * [Command Line Configuration](#command-line-configuration)
     * [YAML based Configuration](#yaml-based-configuration)
-* [Wave Plus Bridge Installation](#wave-plus-bridge-installation)
-    * [Wave Plus Bridge Installation](#wave-plus-bridge-installation)
-    * [Setup the Wave Plus Bridge as a Service](#setup-the-wave-plus-bridge-as-a-service)
+* [Airthings Bridge Installation](#airthings-bridge-installation)
+    * [Airthings Bridge Installation](#airthings-bridge-installation)
+    * [Setup the Airthings Bridge as a Service](#setup-the-wave-plus-bridge-as-a-service)
 * [Raspberry Pi Installation](#raspberry-pi-installation)
     * [Raspbian installation](#raspbian-installation)
-    * [Python Library Installation](#python-library-installation)
 * [Debugging](#debugging)
     * [Some simple checks](#some-simple-checks)
     * [Run the Wave Plus communication test application](#run-the-wave-plus-communication-test-application)
-    * [Run the Wave Plus Bridge using a minimalist configuration](#run-the-wave-plus-bridge-using-a-minimalist-configuration)
+    * [Run the Airthings Bridge using a minimalist configuration](#run-the-wave-plus-bridge-using-a-minimalist-configuration)
     * [Email and SMTP server configuration](#email-and-smtp-server-configuration)
     * [MQTT configuration](#mqtt-configuration)
     * [Enable logging of additional debug information](#enable-logging-of-additional-debug-information)
@@ -44,7 +43,7 @@ The tool runs with Python 3.11 or later. It can be installed as a service that i
 
 ## Hardware Requirements
 
-The following hardware components are required to run the Wave Plus Bridge:
+The following hardware components are required to run the Airthings Bridge:
 
 * One or multiple Airthings Wave Plus devices
 * A Raspberry PI that supports Bluetooth Low Energy (BLE) (by providing either built-in support or via a Bluetooth adapter)
@@ -64,30 +63,30 @@ The following software packages need to be installed on the Raspberry Pi:
 * The Python 3 library yaml (PyYAML)
 * The Python 3 library paho-mqtt (if MQTT publishing is required)
 
-The sections [Raspbian installation](#raspbian-installation) and [Python Library Installation](#python-library-installation) provide support for the installation of the Raspbian OS and the Python library installation.
+The section [Raspbian installation](#raspbian-installation) provides support for the installation of the Raspbian OS. The Python libraries are installed together with the bridge.
 
 
-# Wave Plus Bridge Configuration
+# Airthings Bridge Configuration
 
-The Wave Plus Bridge can be configured via command line arguments, via a YAML configuration file or via a combination of both of them. The command line arguments have precedence over the YAML configuration file, which has been used in an example below to override the log file definition. Advanced configurations, e.g. email alerts, can only be performed via the YAML file and not via command line arguments.
+The Airthings Bridge can be configured via command line arguments, via a YAML configuration file or via a combination of both of them. The command line arguments have precedence over the YAML configuration file, which has been used in an example below to override the log file definition. Advanced configurations, e.g. email alerts, can only be performed via the YAML file and not via command line arguments.
 
 
 ## Command Line Configuration
 
-Running the Wave Plus Bridge Python program with the *-h* argument will provide comprehensive instructions about the tool configurations:
+Running the bridge with the *-h* argument will provide comprehensive instructions about the tool configurations:
 
 ```
-sudo /opt/waveplus_bridge/waveplus_bridge.py -h
+/opt/airthings_bridge/bin/airthings-bridge -h
 ```
 
 ```
-usage: waveplus_bridge.py [-h] [--version] [--period PERIOD]
-                          [--data_retention DATA_RETENTION] [--port PORT]
-                          [--csv CSV] [--log LOG] [--config CONFIG]
-                          [--emulation] [--developer]
-                          [sn ...]
+usage: airthings-bridge [-h] [--version] [--period PERIOD]
+                        [--data_retention DATA_RETENTION] [--port PORT]
+                        [--csv CSV] [--log LOG] [--config CONFIG]
+                        [--emulation] [--developer]
+                        [sn ...]
 
-Wave Plus to Wifi/LAN Bridge
+Airthings BLE sensors to Wifi/LAN Bridge
 
 positional arguments:
   sn                    10-digit serial number of a Wave Plus device (see
@@ -115,7 +114,7 @@ options:
 
 ## YAML based Configuration
 
-The same and additional parameters can also be configured via YAML files specified with the --config command line argument. The Wave Plus Bridge package provides a YAML template file (waveplus_bridge.yaml) that has to be adapted to the specific needs.
+The same and additional parameters can also be configured via YAML files specified with the --config command line argument. The Airthings Bridge package provides a YAML template file (airthings_bridge.yaml) that has to be adapted to the specific needs.
 
 
 ### Basic Configuration
@@ -147,7 +146,7 @@ port: 80
 # Log file: Comment the following line to log all information to stdout.
 # For more sophisticated logging configurations, for example for debugging, see
 # section 'Debugging' of README.md.
-log: /var/log/waveplus_bridge/waveplus_bridge.log
+log: /var/log/airthings_bridge/airthings_bridge.log
 ```
 
 ### CSV Database and Graph Generation
@@ -158,7 +157,7 @@ The CSV file format and the graph decimation format have changed with version 2.
 
 ```
 # CSV log file: If no CSV data logging is required, comment the following line.
-csv: /var/lib/waveplus_bridge/waveplus_bridge.csv
+csv: /var/lib/airthings_bridge/airthings_bridge.csv
 
 # Data retention time in seconds (to limit the memory use)
 data_retention: 2678400 # 31 days
@@ -319,7 +318,7 @@ mqtt:
     
     # MQTT topic root: The topics for the different parameters to publish will 
     # be composed in the following way: <topic root>/<device>/<sensor>
-    topic: my_nice_home/waveplus_bridge
+    topic: my_nice_home/airthings_bridge
 
     # List the Wave Plus devices and their sensors that should be published. A
     # list of sensors to publish can be assigned to each device:
@@ -333,57 +332,33 @@ mqtt:
 ```
 
 
-# Wave Plus Bridge Installation
+# Airthings Bridge Installation
 
 
-## Wave Plus Bridge Installation
+## Airthings Bridge Installation
 
-The following commands install the Wave Plus Bridge in the directory /opt/waveplus_bridge.
-
-Download and unzip the Wave Plus Bridge software from GitHub:
-
-```
-wget https://github.com/Drolla/WavePlus_Bridge/archive/master.zip
-unzip master.zip
-```
-
-Copy it to /opt/waveplus_bridge, and make the Main Python script executable:
+The following commands install the Airthings Bridge into a Python virtual
+environment in the directory /opt/airthings_bridge. Raspberry Pi OS Bookworm
+and later doesn't allow installing Python packages globally with pip.
 
 ```
-sudo mv WavePlus_Bridge-master /opt/waveplus_bridge
-sudo chmod 775 /opt/waveplus_bridge/waveplus_bridge.py
+sudo python3 -m venv /opt/airthings_bridge
+sudo /opt/airthings_bridge/bin/pip install https://github.com/Drolla/WavePlus_Bridge/archive/master.zip
 ```
 
-Adapt the configuration, see [Wave Plus Bridge Configuration](#wave-plus-bridge-configuration):
+Download the configuration template and adapt it, see [Airthings Bridge Configuration](#airthings-bridge-configuration):
 
 ```
-sudo nano /opt/waveplus_bridge/waveplus_bridge.yaml
+sudo wget -O /opt/airthings_bridge/airthings_bridge.yaml https://raw.githubusercontent.com/Drolla/WavePlus_Bridge/master/airthings_bridge.yaml
+sudo nano /opt/airthings_bridge/airthings_bridge.yaml
 ```
 
-Install the required Python libraries, see [Python Library Installation](#python-library-installation).
-
-The Wave Plus Bridge is now ready to be started. To get the log information displayed directly on the terminal for debugging purposes, override the log file definition (--log argument):
+The bridge is now ready to be started. To get the log information displayed directly on the terminal for debugging purposes, override the log file definition (--log argument):
 
 ```
-sudo /opt/waveplus_bridge/bin/python /opt/waveplus_bridge/waveplus_bridge.py \
-       --config /opt/waveplus_bridge/waveplus_bridge.yaml \
+sudo /opt/airthings_bridge/bin/airthings-bridge \
+       --config /opt/airthings_bridge/airthings_bridge.yaml \
        --log ""
-```
-
-The log output will confirm if the bridge could successfully connect to the Wave Plus devices:
-
-```
-Read configuration file /opt/waveplus_bridge/waveplus_bridge.yaml
-Configuration: 
-   {'period': 120, 'sn': ['2930012345', '2931234569'], 'port': 80, 
-    'csv': '/var/lib/waveplus_bridge/waveplus_bridge.csv', 'log': '', 
-    'config': '/opt/waveplus_bridge/waveplus_bridge.yaml', 
-    'name': {'2931234567': 'my_office', '2931234569': 'my_living'}}
- Data are logged to CSV file /var/lib/waveplus_bridge/waveplus_bridge.csv
- HTTP/Web server started on port 80
- Press ctrl+C to exit program!
- Device 2931234567 found, MAC address=a4:da:32:b9:53:c2
- Device 2931234569 found, MAC address=a4:da:32:b9:3f:b6
 ```
 
 If the bridge has been successfully started, check if a connection to the HTTP/Web server can be established from a web browser (use address: http://<RaspberryPI_IP_Address>:<Port>).
@@ -391,33 +366,33 @@ If the bridge has been successfully started, check if a connection to the HTTP/W
 Omit simply the --log argument to use the log file specified by the YAML configuration file.
 
 
-## Setup the Wave Plus Bridge as a Service
+## Setup the Airthings Bridge as a Service
 
-The Wave Plus Bridge runs as systemd service under a dedicated user. Create this user:
+The bridge runs as systemd service under a dedicated user. Create this user:
 
 ```
-sudo useradd --system --no-create-home waveplus_bridge
+sudo useradd --system --no-create-home airthings_bridge
 ```
 
 Install and start the service. Modify the service file if necessary, for example to select a different YAML configuration file:
 
 ```
-sudo cp /opt/waveplus_bridge/systemd/waveplus_bridge.service /etc/systemd/system/
+sudo wget -O /etc/systemd/system/airthings_bridge.service https://raw.githubusercontent.com/Drolla/WavePlus_Bridge/master/systemd/airthings_bridge.service
 sudo systemctl daemon-reload
-sudo systemctl enable --now waveplus_bridge
+sudo systemctl enable --now airthings_bridge
 ```
 
 Check the service status and the log output (if no log file is configured):
 
 ```
-systemctl status waveplus_bridge
-journalctl -u waveplus_bridge -f
+systemctl status airthings_bridge
+journalctl -u airthings_bridge -f
 ```
 
 The service is started automatically after a reboot. It can be stopped and disabled with:
 
 ```
-sudo systemctl disable --now waveplus_bridge
+sudo systemctl disable --now airthings_bridge
 ```
 
 ### Upgrade from version 1.x
@@ -426,12 +401,16 @@ sudo systemctl disable --now waveplus_bridge
   `sudo /etc/init.d/waveplus_bridge stop`,
   `sudo update-rc.d waveplus_bridge remove`,
   `sudo rm /etc/init.d/waveplus_bridge`
-* The service user can't write into /var/log. Move the CSV file to the new
-  location (`sudo mkdir /var/lib/waveplus_bridge`,
-  `sudo mv /var/log/waveplus_bridge.csv /var/lib/waveplus_bridge/`), and update
-  the log and CSV file paths in the YAML configuration file.
+* Install version 2 as described above. Take over the settings of the old
+  configuration file /opt/waveplus_bridge/waveplus_bridge.yaml.
+* Move the CSV file to the new location
+  (`sudo mkdir /var/lib/airthings_bridge`,
+  `sudo mv /var/log/waveplus_bridge.csv /var/lib/airthings_bridge/airthings_bridge.csv`).
+  It is converted to the new format at the first start, and the original file
+  is kept as backup (`.v1.bak`).
 * Update the graph decimation definitions in the YAML configuration file, see
   [CSV Database and Graph Generation](#csv-database-and-graph-generation).
+* Remove the old installation: `sudo rm -r /opt/waveplus_bridge`
 
 
 # Raspberry Pi Installation
@@ -484,32 +463,6 @@ The Bluetooth LE access doesn't require root privileges, but membership of the
 sudo usermod -aG bluetooth $USER
 ```
 
-## Python Library Installation
-
-The Raspberry Pi OS bookworm and later no longer allows globally installing Python libraries using pip.
-The preferred approach is to create a virtualenv.
-
-
-Use the following to create a virtualenv in the install directory.
-```
-python -m venv /opt/waveplus_bridge
-```
-
-To make sure you are working within the venv for this next step, activate it. This step is optional but it ensures your paths use the correct python binaries.
-
-```
-cd /opt/waveplus_bridge
-source bin/activate
-```
-
-The prompt will change which shows activation was successful. Running `which python` will show the path to the binary is now your virtualenv: `/opt/waveplus_bridge/bin/python`.
-
-Now install the prerequisites with the following command:
-
-```
-pip install -r requirements.txt
-```
-
 # Debugging
 
 ## Some simple checks
@@ -518,38 +471,34 @@ The following list may help you to find some frequent root causes:
 
 * Check that the Raspberry Bluetooth interface is enabled: See last paragraph
   in section [Raspbian installation](#raspbian-installation).
-* Ensure that all Python3 packages are installed: See last paragraph in section
-  [Python Library Installation](#python-library-installation).
 * Ensure that the communication between the Wave Plus bridge and the the Wave
   Plus device(s) work: Follow the instructions in section
   [Run the Wave Plus communication test application](#run-the-wave-plus-bridge-using-a-minimalist-configuration)
 * Check the last lines in the log file (or standard output log) to find an
   indication about the encountered error.
-* Ensure that the application (waveplus_bridge.py) is executable (chmod 775)
 * Ensure that the provided serial numbers for the Wave Plus device(s) is/are
   correct.
 
 ## Run the Wave Plus communication test application
 
-Instead of using the Wave Plus Bridge to validate and debug the communication
-with a Wave Plus device, it may be easier to use just the 'waveplus.py' module
-that is stored in the 'libs' folder. If it is launched standalone, this module
-provides a minimalistic test application that reports any activities on the
-standard output.
+Instead of using the Airthings Bridge to validate and debug the communication
+with a Wave Plus device, it may be easier to use just the 'wave_plus' module.
+If it is launched standalone, this module provides a minimalistic test
+application that reports any activities on the standard output.
 
-Run the 'waveplus.py' test application as member of the 'bluetooth' group (see
+Run the 'wave_plus' test application as member of the 'bluetooth' group (see
 [Raspbian installation](#raspbian-installation)), and provide as first argument
 the update period in seconds, followed by one or multiple serial numbers of Wave
 Plus device(s):
 
 ```
-/opt/waveplus_bridge/bin/python libs/waveplus.py <period> <serial_number_1> [serial_number_2] ..
+/opt/airthings_bridge/bin/python -m airthings_bridge.airthings.wave_plus <period> <serial_number_1> [serial_number_2] ..
 ```
 
 That's all. The test application will continuously read the Wave Plus device
 sensors in the specified interval. Check in the log that the communication to
 the Wave Plus device(s) work well. Without having a stable communication, it
-does not make sense to setup and run the full Wave Plus Bride application. You
+does not make sense to setup and run the full Airthings Bridge application. You
 should get a log similar to the following lines:
 
 ```
@@ -590,36 +539,36 @@ Reading sensor data for device 2930031376
 ...
 ```
 
-## Run the Wave Plus Bridge using a minimalist configuration
+## Run the Airthings Bridge using a minimalist configuration
 
-Perform your first trials with the Wave Plus Bridge application using a simple
+Perform your first trials with the Airthings Bridge application using a simple
 configuration provided only as application argument, and not via a YAML
 configuration file. No other arguments than one or multiple Wave Plus device
 serial numbers are required to start the application. If no HTTP port and YAML
-configuration file is specified, the Wave Plus Bridge application reports
+configuration file is specified, the Airthings Bridge application reports
 detailed activities, which is useful to debug communication issues. Run the
 application as member of the 'bluetooth' group:
 
 ```
-/opt/waveplus_bridge/bin/python ./waveplus_bridge.py 2930031376 2930089521
+/opt/airthings_bridge/bin/airthings-bridge 2930031376 2930089521
 ```
 
 This should lead to a similar log as shown in the following lines:
 
 ```
-2022-06-23 22:20:41 -      __main__[   INFO] - Setup WavePlus device access
-2022-06-23 22:20:41 -      __main__[   INFO] -   Done
-2022-06-23 22:20:41 -      __main__[   INFO] - Start main loop. Press ctrl+C to exit program!
-2022-06-23 22:20:41 -      __main__[  DEBUG] - Reading sensor data for device 2930031376
-2022-06-23 22:20:46 -      __main__[  DEBUG] -   -> {'humidity': 59.5, 'radon_st': 34, 'radon_lt': 44, ...}
-2022-06-23 22:20:46 -      __main__[  DEBUG] - Reading sensor data for device 2930089521
-2022-06-23 22:20:48 -      __main__[  DEBUG] -   -> {'humidity': 63.0, 'radon_st': 59, 'radon_lt': 45, ...}
-2022-06-23 22:22:41 -      __main__[  DEBUG] - Reading sensor data for device 2930031376
-2022-06-23 22:22:43 -      __main__[  DEBUG] -   -> {'humidity': 59.5, 'radon_st': 34, 'radon_lt': 44, ...}
+2022-06-23 22:20:41 - airthings_bridge.bridge[   INFO] - Setup WavePlus device access
+2022-06-23 22:20:41 - airthings_bridge.bridge[   INFO] -   Done
+2022-06-23 22:20:41 - airthings_bridge.bridge[   INFO] - Start main loop. Press ctrl+C to exit program!
+2022-06-23 22:20:41 - airthings_bridge.bridge[  DEBUG] - Reading sensor data for device 2930031376
+2022-06-23 22:20:46 - airthings_bridge.bridge[  DEBUG] -   -> {'humidity': 59.5, 'radon_st': 34, 'radon_lt': 44, ...}
+2022-06-23 22:20:46 - airthings_bridge.bridge[  DEBUG] - Reading sensor data for device 2930089521
+2022-06-23 22:20:48 - airthings_bridge.bridge[  DEBUG] -   -> {'humidity': 63.0, 'radon_st': 59, 'radon_lt': 45, ...}
+2022-06-23 22:22:41 - airthings_bridge.bridge[  DEBUG] - Reading sensor data for device 2930031376
+2022-06-23 22:22:43 - airthings_bridge.bridge[  DEBUG] -   -> {'humidity': 59.5, 'radon_st': 34, 'radon_lt': 44, ...}
 
 ```
 
-In case the Wave Plus Bridge does not work correctly at this stage, even more
+In case the Airthings Bridge does not work correctly at this stage, even more
 detailed information has be reported by following the instructions provided in
 section [Enable logging of additional debug information].
 
@@ -628,10 +577,10 @@ section [Enable logging of additional debug information].
 This section provides some help in case emails are not sent correctly.
 
 First of all, the mail settings should be tested by running the
-'libs/threadedsendmail.py' module as script:
+'airthings_bridge.mail' module as script:
 
 ```
-usage: python threadedsendmail.py [-h] [--port PORT] [--security SECURITY]
+usage: python -m airthings_bridge.mail [-h] [--port PORT] [--security SECURITY]
                                   [--user USER] [--password PASSWORD]
                                   [--subject SUBJECT] [--message MESSAGE]
                                   [--debug_level DEBUG_LEVEL] --server SERVER
@@ -660,7 +609,7 @@ So, refine the server and login credentials until an email is successfully
 sent:
 
 ```
-python libs/threadedsendmail.py \
+/opt/airthings_bridge/bin/python -m airthings_bridge.mail \
         --server <SERVER> --port <PORT> --security <SECURITY> \
         --user <USER> --password <PASSWORD> \
         --from <FROM> --to <DESTINATION> \
@@ -707,59 +656,7 @@ This section provides instructions how the MQTT server and device configuration 
 
 First of all, it is recommended to run a generic MQTT client that allows exploring the message queues. Such tools are free available on the net (search for 'MQTT explorer').
 
-The MQTT server/broker settings can then be checked by executing the demo application provided by the 'threadedmqttpublisher.py' module. The usage can be obtained by running it with the '-h' option:
-
-```
-python threadedmqttpublisher.py -h
-
-usage: threadedmqttpublisher.py [-h] \
-            --host HOST --topic_root TOPIC_ROOT 
-            [--port PORT] [--client_id CLIENT_ID] [--auth AUTH] [--tls TLS] \
-            [--will WILL] \
-            [--debug_level DEBUG_LEVEL] \
-            message_dicts [message_dicts ...]
-
-positional arguments:
-  message_dicts         Message dict: {<topic1>: <msg1>,..,<topic2>: <msg2>}
-
-optional arguments:
-  -h, --help            show this help message and exit
-  --port PORT           MQTT broker host port, default=1883
-  --client_id CLIENT_ID
-                        Client ID
-  --auth AUTH           Dict containing authentication parameters:
-                        {username: <username>, password: <password>}
-  --tls TLS             Dict containing client TLS configuration parameters:
-                        {ca_certs: <ca_certs>, certfile: <certfile>,
-                        keyfile: <keyfile>, tls_version: <tls_version>,
-                        ciphers: <ciphers>, insecure: <bool>}
-  --will WILL           Dict containing will parameters for the client:
-                        {topic: <topic>, payload: <payload>, qos: <qos>,
-                        retain=True
-  --debug_level DEBUG_LEVEL
-                        debug level. 0=no debug info,
-                        3=max level of debug info
-
-required named arguments:
-  --host HOST           MQTT broker host address
-  --topic_root TOPIC_ROOT
-                        MQTT topic root
-
-Remark:
-    Dicts have to be provided in YAML format (auth, tls, will).
-
-Example:
-    python threadedmqttpublisher.py \
-        --host test.mosquitto.org --port 1883 \
-        --topic my_nice_home/waveplus_bridge \
-        --will "{topic: my_nice_home/waveplus_bridge/status, \
-                 payload: Offline}"
-        "{status: Online}" \
-        "{humidity: 61.5, radon_st: 35, temperature: 18.5}" \
-        "{humidity: 66.5, radon_st: 38, temperature: 23.5}"
-```
-
-Once the  MQTT client receives messages, the settings can be ported into the YAML configuration file.
+Subscribe with this client to the topics configured in the YAML file ('mqtt' section) to check which messages the bridge publishes.
 
 
 ## Enable logging of additional debug information
@@ -769,7 +666,7 @@ code, the logging scheme is highly configurable via the YAML configuration
 file.
 
 The logging mechanism is based on the standard Python logging module, which
-allows defining logging levels individually for the main Wave Plus Bridge
+allows defining logging levels individually for the main Airthings Bridge
 application as well as all the different libraries that are part of the
 application.
 
@@ -777,13 +674,14 @@ The following section lists the loggers that are available for the main
 application and the modules, together with their default logging level:
 
 * \<root\> : Root logger (WARNING)
-* \_\_main\_\_ : Main application logger (INFO)
-* libs : Common library/module logger (WARNING)
-* libs.waveplus : waveplus module logger (WARNING)
-* libs.logdb : logdb module logger (WARNING)
-* libs.sensorlog : sensorlog module logger (WARNING)
-* libs.threadedsendmail : threadedsendmail module logger (WARNING)
-* libs.performancecheck : performancecheck module logger (WARNING)
+* airthings_bridge : Common logger of all modules (WARNING)
+* airthings_bridge.bridge : Main application logger (INFO)
+* airthings_bridge.airthings.wave_plus : Wave Plus device logger
+* airthings_bridge.logdb : logdb module logger
+* airthings_bridge.consumers.sensorlog : sensorlog module logger
+* airthings_bridge.consumers.mqtt : MQTT publisher logger
+* airthings_bridge.mail : mail module logger
+* airthings_bridge.performancecheck : performancecheck module logger
 
 If a log file is provided via the '--log' option of the main application or by
 the YAML configuration file, a file handler is used to write log data.
@@ -809,49 +707,49 @@ log:
         level: DEBUG
         formatter: default
         class : logging.FileHandler
-        filename: /var/log/waveplus_bridge/waveplus_bridge.log
+        filename: /var/log/airthings_bridge/airthings_bridge.log
         encoding: utf8
         mode: a
     root:
       level: WARNING
       handlers: [file]
     loggers:
-      __main__:
-        level: INFO
-      libs:
+      airthings_bridge:
         level: WARNING
+      airthings_bridge.bridge:
+        level: INFO
       # Configure additional loggers if required:
-      # libs.waveplus:
+      # airthings_bridge.airthings.wave_plus:
       #   level: INFO
-      # libs.logdb:
-      # libs.sensorlog:
-      # libs.threadedmqttpublisher:
-      # libs.threadedsendmail:
-      # libs.performancecheck:
+      # airthings_bridge.logdb:
+      # airthings_bridge.consumers.sensorlog:
+      # airthings_bridge.consumers.mqtt:
+      # airthings_bridge.mail:
+      # airthings_bridge.performancecheck:
 ```
 
 For each module, a dedicated logging level can be selected out of the following
 options: CRITICAL, ERROR, WARNING, INFO, DEBUG.
 
 So, to log additional debug information of the main module, change simply the
-corresponding debug level of the '__main__' logger:
+corresponding debug level of the 'airthings_bridge.bridge' logger:
 
 ```
-      __main__:
+      airthings_bridge.bridge:
         level: DEBUG
 ```
 
-To log additional information of the waveplus module, like connection details:
+To log additional information of the wave_plus module, like connection details:
 
 ```
-      libs.waveplus:
+      airthings_bridge.airthings.wave_plus:
         level: INFO
 ```
 
 Or to log even more detailed debug information, change the previous lines into:
 
 ```
-      libs.waveplus:
+      airthings_bridge.airthings.wave_plus:
         level: DEBUG
 ```
 

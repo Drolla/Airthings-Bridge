@@ -1,4 +1,4 @@
-# WavePlus Bridge - project instructions
+# Airthings Bridge - project instructions
 
 ## Code
 
@@ -9,13 +9,15 @@
 - Keep comments and docstrings concise. Don't state what the code already
   makes evident; comment the why and non-obvious facts. Correct comments,
   don't expand them.
-- `libs/logdb.py` is a verbatim copy of the phc logdb module
+- The code is the `airthings_bridge` package; the console script is
+  `airthings-bridge` (`airthings_bridge.cli:main`).
+- `airthings_bridge/logdb.py` is a verbatim copy of the phc logdb module
   (https://github.com/Drolla/phc/tree/main/phc/extensions/logdb), and
   `tests/test_logdb.py` of its tests. The only local changes are the module
   and logger names. Fix logdb in phc and copy it over; put bridge-specific
-  behaviour into `libs/sensorlog.py`.
+  behaviour into `airthings_bridge/consumers/sensorlog.py`.
 - BLE access uses bleak (asyncio) behind the synchronous `WavePlus` API in
-  `libs/waveplus.py`. The service runs without root.
+  `airthings_bridge/airthings/wave_plus.py`. The service runs without root.
 - The `/eval` HTTP endpoint is kept, but only active in developer mode.
 
 ## Branches
@@ -28,9 +30,10 @@
 
 ## Checks
 
-Before committing:
+Install the package with its development tools (`pip install -e .[dev]`),
+then before committing:
 
 ```
 python -m ruff check .
-cd tests && python -m pytest
+python -m pytest
 ```

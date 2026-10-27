@@ -1,0 +1,1 @@
+"""Airthings BLE devices."""

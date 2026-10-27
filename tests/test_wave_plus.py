@@ -1,11 +1,11 @@
-"""Tests for libs.waveplus, with an emulated bleak BLE library."""
+"""Tests for airthings.wave_plus, with an emulated bleak BLE library."""
 
 import struct
 from unittest import mock
 
 import pytest
 
-from libs import waveplus
+from airthings_bridge.airthings import wave_plus as waveplus
 
 SN = "2931234567"
 ADDRESS = "AA:BB:CC:DD:EE:FF"

@@ -1,4 +1,4 @@
-######## Basic WavePlus Bridge configuration ########
+######## Basic Airthings Bridge configuration ########
 #
 # The basic configuration includes the specification of the Wave Plus devices
 # serial numbers, the sensor update period, the HTTP port and optionally the log
@@ -28,7 +28,7 @@ port: 80
 # Log file: Comment the following line to log all information to stdout.
 # For more sophisticated logging configurations, for example for debugging, see
 # section 'Debugging' of README.md.
-#log: waveplus_bridge_test.log
+#log: airthings_bridge_test.log
 
 log:
     version: 1
@@ -43,11 +43,11 @@ log:
         class: logging.StreamHandler
         stream: ext://sys.stdout
     loggers:
-      __main__:
+      airthings_bridge.bridge:
         level: INFO
         handlers: [console]
         propagate: no
-      waveplus_emulation:
+      airthings_bridge.emulation:
         level: DEBUG
         handlers: [console]
         propagate: no
@@ -64,7 +64,7 @@ log:
 # recorded data.
 
 # CSV log file: If no CSV data logging is required, comment the following line.
-csv: waveplus_bridge_test.csv
+csv: airthings_bridge_test.csv
 
 # Data retention time in seconds (to limit the memory use)
 data_retention: 2678400 # 31 days
@@ -220,7 +220,7 @@ mqtt:
     
     # MQTT topic root: The topics for the different parameters to publish will 
     # be composed in the following way: <topic root>/<device>/<sensor>
-    topic: my_nice_home/waveplus_bridge
+    topic: my_nice_home/airthings_bridge
 
     # List the Wave Plus devices and their sensors that should be published. A
     # list of sensors to publish can be assigned to each device:
