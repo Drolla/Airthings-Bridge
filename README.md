@@ -92,7 +92,7 @@ positional arguments:
   sn                    10-digit serial number of a Wave Plus device (see
                         under the magnetic backplate. This number can be
                         combined with a device nickname, separated by a column
-                        from the serial number ("2931234567, my_office")
+                        from the serial number ("2930123456, my_office")
 
 options:
   -h, --help            show this help message and exit
@@ -134,10 +134,10 @@ retry_delay: 1
 # SN: List of 10-digit serial number of one or multiple Wave Plus devices (see 
 # under the magnetic backplate. Each number can be combined with a device 
 # nickname, separated by a column from the serial number 
-# (e.g. "2931234567, my_office").
+# (e.g. "2930123456, my_office").
 sn:
-   - 2931234567, my_office
-   - 2931234569, my_living
+   - 2930123456, my_office
+   - 2930123457, my_living
 
 # HTTP/Web server port: If no HTTP/web server is required, comment the 
 # following line.

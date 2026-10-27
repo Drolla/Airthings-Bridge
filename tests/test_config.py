@@ -16,14 +16,14 @@ from airthings_bridge.errors import ConfigError
 
 EXAMPLE_FILES = [Path(__file__).parent / "test_configuration.yaml",
                  Path(__file__).parent.parent / "airthings_bridge.yaml"]
-SN = ["2931234567, office", "2931234569 living"]
+SN = ["2930123456, office", "2930123457 living"]
 
 
 @pytest.mark.parametrize("file", EXAMPLE_FILES, ids=lambda f: f.name)
 def test_example_files_are_valid(file):
     config = load_config(file)
-    assert config.devices == (DeviceConfig("2931234567", "my_office"),
-                              DeviceConfig("2931234569", "my_living"))
+    assert config.devices == (DeviceConfig("2930123456", "my_office"),
+                              DeviceConfig("2930123457", "my_living"))
     assert config.graph_decimations == ((691200.0, 8), (90000.0, 3))
     assert len(config.alerts) == 2
     assert config.alerts[1].sources == (("my_office", "radon_st"), ("my_living", "radon_st"))
@@ -34,8 +34,8 @@ def test_example_files_are_valid(file):
 
 
 def test_defaults():
-    config = build_config({"sn": "2931234567"})
-    assert config.devices == (DeviceConfig("2931234567", "2931234567"),)
+    config = build_config({"sn": "2930123456"})
+    assert config.devices == (DeviceConfig("2930123456", "2930123456"),)
     assert config.period == DEFAULT_PERIOD
     assert (config.port, config.csv, config.smtp, config.mqtt) == (None, None, None, None)
     assert config.alerts == ()
@@ -44,23 +44,23 @@ def test_defaults():
 
 def test_overrides_have_precedence(tmp_path):
     file = tmp_path / "config.yaml"
-    file.write_text("sn: [2931234567]\nport: 80\nlog: bridge.log\n", encoding="utf-8")
+    file.write_text("sn: [2930123456]\nport: 80\nlog: bridge.log\n", encoding="utf-8")
     config = load_config(file, {"port": 8080, "log": "", "sn": [], "csv": None})
     assert config.port == 8080
     assert config.log == ""
-    assert config.devices[0].serial == "2931234567"
+    assert config.devices[0].serial == "2930123456"
     assert config.file == file
 
 
 def test_device_names():
-    devices = build_config({"sn": SN + ["2931234560;cellar"]}).devices
+    devices = build_config({"sn": SN + ["2930123458;cellar"]}).devices
     assert [d.name for d in devices] == ["office", "living", "cellar"]
 
 
 @pytest.mark.parametrize("data, message", [
     ({}, "No serial number"),
     ({"sn": "123"}, "Invalid serial number"),
-    ({"sn": ["2931234567 a", "2931234569 a"]}, "Duplicate device"),
+    ({"sn": ["2930123456 a", "2930123457 a"]}, "Duplicate device"),
     ({"sn": SN, "sensor": 1}, "Unknown configuration key"),
     ({"sn": SN, "period": 0}, "period"),
     ({"sn": SN, "retries": 1.5}, "retries"),

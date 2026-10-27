@@ -11,20 +11,18 @@ import logging
 import signal
 import time
 
-from airthings_bridge import emulation
-from airthings_bridge.airthings import wave_plus
+from airthings_bridge.airthings import AirthingsDevice, create_device
 from airthings_bridge.config import Config
 from airthings_bridge.consumers import Consumer
 from airthings_bridge.consumers.alerts import Alerts
 from airthings_bridge.consumers.mqtt import MqttPublisher
 from airthings_bridge.consumers.sensorlog import SensorLog
+from airthings_bridge.emulation import EmulatedDevice
 from airthings_bridge.errors import DeviceError
 from airthings_bridge.readings import Cycle, LiveState, Reading
 from airthings_bridge.web.server import WebServer
 
 logger = logging.getLogger(__name__)
-
-LOG_LABELS = ["humidity", "radon_st", "radon_lt", "temperature", "pressure", "co2", "voc"]
 
 
 class Bridge:
@@ -38,8 +36,17 @@ class Bridge:
         self._consumers: list[Consumer] = []
         self._stopping = asyncio.Event()
 
-        device_module = emulation if config.emulation else wave_plus
-        self.devices = [device_module.WavePlus(d.serial, d.name) for d in config.devices]
+        self.devices: list[AirthingsDevice | EmulatedDevice] = []
+        for device_config in config.devices:
+            device = create_device(device_config.serial, device_config.name)
+            if config.emulation:
+                device = EmulatedDevice(type(device), device.serial, device.name)
+            self.devices.append(device)
+
+    @staticmethod
+    def model(device: AirthingsDevice | EmulatedDevice) -> type[AirthingsDevice]:
+        """Return the model (device class) of a device."""
+        return device.model if isinstance(device, EmulatedDevice) else type(device)
 
     def stop(self) -> None:
         """Request the bridge to stop."""
@@ -88,7 +95,7 @@ class Bridge:
             logger.info("Open the CSV data log file '%s'", config.csv)
             start = time.perf_counter()
             self.sensor_log = SensorLog(
-                config.csv, {d.name: LOG_LABELS for d in config.devices},
+                config.csv, {d.name: list(self.model(d).SENSOR_KEYS) for d in self.devices},
                 retention=config.data_retention)
             logger.info("  %d records read in %.1f s", len(self.sensor_log),
                         time.perf_counter() - start)
@@ -146,7 +153,7 @@ class Bridge:
             cycle_time += config.period
             await asyncio.sleep(max(0.0, cycle_time - time.time()))
 
-    async def _read(self, device: wave_plus.WavePlus | emulation.WavePlus) -> Reading:
+    async def _read(self, device: AirthingsDevice | EmulatedDevice) -> Reading:
         # Devices are read one after the other, BLE adapters handle a single
         # connection best
         logger.debug("Reading sensor data for device %s", device.name)

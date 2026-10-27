@@ -35,7 +35,7 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
         "sn", metavar="sn", type=str, nargs="*",
         help="""10-digit serial number of a device (see under the magnetic backplate).
                 This number can be combined with a device nickname, separated by a
-                comma from the serial number ("2931234567, my_office")""")
+                comma from the serial number ("2930123456, my_office")""")
     parser.add_argument("--port", type=int, help="Port of the HTTP web server")
     parser.add_argument("--csv", help="CSV file to store data")
     parser.add_argument("--log", help="Log file. If not specified the stdout is used")
