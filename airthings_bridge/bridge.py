@@ -7,9 +7,11 @@ file, and for a DISCLAIMER OF ALL WARRANTIES.
 
 import asyncio
 import contextlib
+import dataclasses
 import logging
 import signal
 import time
+from typing import Any
 
 from airthings_bridge.airthings import AirthingsDevice, create_device
 from airthings_bridge.config import Config
@@ -19,6 +21,7 @@ from airthings_bridge.consumers.mqtt import MqttPublisher
 from airthings_bridge.consumers.sensorlog import SensorLog
 from airthings_bridge.emulation import EmulatedDevice
 from airthings_bridge.errors import DeviceError
+from airthings_bridge.measurements import MEASUREMENTS
 from airthings_bridge.readings import Cycle, LiveState, Reading
 from airthings_bridge.web.server import WebServer
 
@@ -47,6 +50,21 @@ class Bridge:
     def model(device: AirthingsDevice | EmulatedDevice) -> type[AirthingsDevice]:
         """Return the model (device class) of a device."""
         return device.model if isinstance(device, EmulatedDevice) else type(device)
+
+    def meta(self) -> dict[str, Any]:
+        """Return the measurements and the devices (/meta format).
+
+        'logged' lists the keys logged into the CSV file, if there is one.
+        """
+        logging_enabled = self.sensor_log is not None
+        return {
+            "measurements": [dataclasses.asdict(m) for m in MEASUREMENTS],
+            "devices": [{"name": d.name, "serial": d.serial,
+                         "model": self.model(d).PRODUCT_NAME,
+                         "values": list(self.model(d).value_keys()),
+                         "logged": list(self.model(d).SENSOR_KEYS) if logging_enabled else []}
+                        for d in self.devices],
+        }
 
     def stop(self) -> None:
         """Request the bridge to stop."""
@@ -118,8 +136,8 @@ class Bridge:
                 logger.warning("Developer mode is enabled: The /eval HTTP request "
                                "evaluates any provided Python expression!")
             self.web_server = WebServer(
-                config.port, self.live, self.sensor_log, list(config.graph_decimations),
-                config.developer, {"bridge": self})
+                config.port, self.live, self.meta(), self.sensor_log,
+                list(config.graph_decimations), config.developer, {"bridge": self})
             await self.web_server.start()
             logger.info("HTTP/Web server listening on port %s", self.web_server.port)
 
