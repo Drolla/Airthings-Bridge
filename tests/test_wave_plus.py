@@ -6,6 +6,7 @@ from unittest import mock
 import pytest
 
 from airthings_bridge.airthings import wave_plus as waveplus
+from airthings_bridge.errors import DeviceError
 
 SN = "2931234567"
 ADDRESS = "AA:BB:CC:DD:EE:FF"
@@ -139,12 +140,12 @@ def test_control_data_check(data, message):
 
 
 def test_unknown_device_raises_after_retries():
-    with pytest.raises(ConnectionError, match="Failed to communicate"):
+    with pytest.raises(DeviceError, match="Failed to communicate"):
         waveplus.WavePlus("2930000000").get(retries=2)
 
 
 def test_incomplete_indication_raises_after_retries(monkeypatch):
     monkeypatch.setattr(_Client, "chunks", [CONTROL_DATA[:20]])
-    with pytest.raises(ConnectionError):
+    with pytest.raises(DeviceError):
         waveplus.WavePlus(SN).get(retries=1)
     assert len(_Client.instances) == 2

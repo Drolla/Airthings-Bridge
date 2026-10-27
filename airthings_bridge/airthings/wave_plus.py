@@ -24,6 +24,7 @@ from bleak.backends.device import BLEDevice
 from bleak.backends.scanner import AdvertisementData
 
 from airthings_bridge.airthings import time_cache
+from airthings_bridge.errors import DeviceError
 
 logger = logging.getLogger(__name__)
 
@@ -313,7 +314,7 @@ class WavePlus:
                 logger.debug("Retrying in %s seconds", retry_delay)
                 time.sleep(retry_delay)
 
-        raise ConnectionError(
+        raise DeviceError(
             f"Failed to communicate with device {self._sn}/{self._name}")
 
     @classmethod
@@ -393,7 +394,7 @@ if __name__ == "__main__":
                     device_values = [device_data.get(key, "") for key in keys]
                     logger.info(
                             log_format.format(wp_device.name, *device_values))
-                except ConnectionError as err:
+                except DeviceError as err:
                     logger.error("Failed to communicate with device %s: %s",
                                  wp_device.name, err)
             time.sleep(period)

@@ -12,6 +12,7 @@ from typing import Any
 
 import paho.mqtt.client as mqtt_client
 
+from airthings_bridge.config import MqttConfig
 from airthings_bridge.readings import SensorData
 
 logger = logging.getLogger(__name__)
@@ -201,28 +202,28 @@ class ThreadedMqttPublisher:
 
 
 class MqttPublisher:
-    """MQTT publisher of the sensor data, configured by the 'mqtt' section."""
+    """MQTT publisher of the sensor data."""
 
     # Maximum time in seconds to wait on the publication of the 'Offline'
     # status when the publisher is stopped
     STOP_TIMEOUT = 5
 
-    def __init__(self, config: dict[str, Any]):
+    def __init__(self, config: MqttConfig):
         self.mqtt_publisher = None
 
-        self.cfg_topic = config.get("topic", "")
-        self.cfg_publish = config["publish"]
+        self.cfg_topic = config.topic
+        self.cfg_publish = config.publish
         self.status_topic = "/".join(filter(bool, [self.cfg_topic, "status"]))
         will = {"topic": self.status_topic, "payload": "Connection lost",
                 "retain": True}
 
         self.mqtt_publisher = ThreadedMqttPublisher(
-            hostname=config["host"],
-            port=config.get("port", 1883),
-            client_id=config.get("client_id"),
-            auth=config.get("auth"),
-            tls=config.get("tls"),
-            will=config.get("will", will)
+            hostname=config.host,
+            port=config.port,
+            client_id=config.client_id,
+            auth=config.auth,
+            tls=config.tls,
+            will=config.will or will
         )
 
         # Wait until the thread is created

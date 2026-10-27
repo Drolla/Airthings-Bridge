@@ -6,15 +6,15 @@ file, and for a DISCLAIMER OF ALL WARRANTIES.
 """
 
 import logging
-import sys
 import time
 
 from airthings_bridge import emulation
 from airthings_bridge.airthings import wave_plus
-from airthings_bridge.config import ReadConfiguration
-from airthings_bridge.consumers import sensorlog
-from airthings_bridge.consumers.alerts import Actions
+from airthings_bridge.config import Config
+from airthings_bridge.consumers.alerts import Alerts
 from airthings_bridge.consumers.mqtt import MqttPublisher
+from airthings_bridge.consumers.sensorlog import SensorLog
+from airthings_bridge.errors import DeviceError
 from airthings_bridge.performancecheck import PerformanceCheck
 from airthings_bridge.readings import SensorData
 from airthings_bridge.web.server import create_http_request_handler
@@ -22,16 +22,20 @@ from airthings_bridge.web.threadedhttpserver import ThreadedHTTPServer
 
 logger = logging.getLogger(__name__)
 
+LOG_LABELS = ["humidity", "radon_st", "radon_lt", "temperature", "pressure", "co2", "voc"]
 
-def run(config: ReadConfiguration) -> None:
-    """Run the bridge until an interrupt or termination request."""
+
+def run(config: Config) -> None:
+    """Run the bridge until an interrupt or termination request.
+
+    Raises BridgeError or OSError if a consumer or the HTTP server can't be
+    started.
+    """
+    if config.file is not None:
+        logger.info("Configuration file: %s", config.file)
     if config.developer:
         logger.warning("Developer mode is enabled: The /eval HTTP request "
                        "evaluates any provided Python expression!")
-
-    logger.debug("Available logger:")
-    for logger_name in logging.root.manager.loggerDict:
-        logger.debug("   %s", logging.getLogger(logger_name))
 
     # Most recent data of all devices, including the update times
     all_sensor_data_ts: SensorData = {}
@@ -39,72 +43,31 @@ def run(config: ReadConfiguration) -> None:
     ldb = None
     if config.csv is not None:
         logger.info("Opening CSV data log file '%s'", config.csv)
-        log_labels = ["humidity", "radon_st", "radon_lt",
-                      "temperature", "pressure", "co2", "voc"]
-        try:
-            with PerformanceCheck("LogDB/CSV file loading"):
-                ldb = sensorlog.SensorLog(
-                        config.csv,
-                        {config.name[sn]: log_labels for sn in config.sn},
-                        retention=config.data_retention)
-            logger.info("  %d records read", len(ldb))
-        except PermissionError:
-            logger.error("  No permission to open file %s!", config.csv)
-        except Exception as err:
-            logger.critical("  Error accessing file %s : %s", config.csv, err)
-            sys.exit(1)
+        with PerformanceCheck("LogDB/CSV file loading"):
+            ldb = SensorLog(config.csv, {d.name: LOG_LABELS for d in config.devices},
+                            retention=config.data_retention)
+        logger.info("  %d records read", len(ldb))
 
     if config.port is not None:
         logger.info("Start HTTP/Web server on port %s", config.port)
-        try:
-            graph_decimations = sensorlog.parse_decimations(
-                    config.graph_decimations)
-        except ValueError as err:
-            logger.critical("  %s", err)
-            sys.exit(1)
-        try:
-            handler_class = create_http_request_handler(
-                    all_sensor_data_ts, ldb, graph_decimations,
-                    bool(config.developer))
-            ThreadedHTTPServer(("", int(config.port)), handler_class)
-            logger.info("  Done")
-        except Exception:
-            logger.critical("  Unable to open HTTP port %s!", config.port)
-            logger.debug("    Stack trace:", exc_info=True)
-            sys.exit(1)
+        handler_class = create_http_request_handler(
+            all_sensor_data_ts, ldb, list(config.graph_decimations), config.developer)
+        ThreadedHTTPServer(("", config.port), handler_class)
 
-    actions = None
-    if "alerts" in config:
-        logger.info("Setup email alerts")
-        if "smtp_server" not in config:
-            logger.critical("  No SMTP server is configured!")
-            sys.exit(1)
-        try:
-            actions = Actions(config.smtp_server, config.alerts)
-            logger.info("  Done")
-        except Exception as err:
-            logger.critical("  Unable to setup the alerts: %s", err)
-            logger.debug("    Stack trace:", exc_info=True)
-            sys.exit(1)
+    alerts = None
+    if config.alerts:
+        logger.info("Setup alerts")
+        alerts = Alerts(config.alerts, config.smtp)
 
     mqtt_publisher = None
-    if "mqtt" in config:
+    if config.mqtt is not None:
         logger.info("Setup MQTT publishing")
-        try:
-            mqtt_publisher = MqttPublisher(config.mqtt)
-            logger.info("  Done")
-        except Exception as err:
-            logger.critical("  Unable to setup MQTT publishing: %s", err)
-            logger.debug("    Stack trace:", exc_info=True)
-            sys.exit(1)
+        mqtt_publisher = MqttPublisher(config.mqtt)
 
-    logger.info("Setup WavePlus device access")
-    wp_module = wave_plus
+    device_module = emulation if config.emulation else wave_plus
     if config.emulation:
-        wp_module = emulation
         logger.warning("Use WavePlus emulation module")
-    wp_devices = [wp_module.WavePlus(sn, config.name[sn]) for sn in config.sn]
-    logger.info("  Done")
+    devices = [device_module.WavePlus(d.serial, d.name) for d in config.devices]
 
     logger.info("Start main loop. Press ctrl+C to exit program!")
     iteration_start_time = time.time()
@@ -119,23 +82,20 @@ def run(config: ReadConfiguration) -> None:
         sensor_data_ts: SensorData = {}
 
         try:
-            for wp_device in wp_devices:
-                logger.debug(
-                        "Reading sensor data for device %s", wp_device.name)
+            for device in devices:
+                logger.debug("Reading sensor data for device %s", device.name)
                 sdata_ts = sdata_no_ts = {}
                 try:
-                    sdata_no_ts = wp_device.get(
-                            retries=config.retries,
-                            retry_delay=config.retry_delay)
+                    sdata_no_ts = device.get(
+                        retries=config.retries, retry_delay=config.retry_delay)
                     logger.debug("  -> %s", sdata_no_ts)
                     sdata_ts = sdata_no_ts.copy()
                     sdata_ts["update_time"] = int(time.time())
-                except Exception as err:
-                    logger.error("Failed to communicate with device %s: %s",
-                                 wp_device.name, err)
-                sensor_data_no_ts[wp_device.name] = sdata_no_ts
-                sensor_data_ts[wp_device.name] = sdata_ts
-                all_sensor_data_ts[wp_device.name] = sdata_ts
+                except DeviceError as err:
+                    logger.error("%s", err)
+                sensor_data_no_ts[device.name] = sdata_no_ts
+                sensor_data_ts[device.name] = sdata_ts
+                all_sensor_data_ts[device.name] = sdata_ts
 
             if ldb is not None:
                 try:
@@ -144,9 +104,9 @@ def run(config: ReadConfiguration) -> None:
                     logger.error("Failed to log the data: %s", err)
                     logger.debug("  Stack trace:", exc_info=True)
 
-            if actions is not None:
+            if alerts is not None:
                 try:
-                    actions.check_levels(sensor_data_no_ts)
+                    alerts.check_levels(sensor_data_no_ts)
                 except UserWarning as err:
                     logger.warning("Failed to trigger alerts: %s", err)
                 except Exception as err:
@@ -165,12 +125,7 @@ def run(config: ReadConfiguration) -> None:
         except (KeyboardInterrupt, SystemExit):
             logger.warning("Interrupt/termination request detected")
             break
-        except Exception as err:
-            logger.error("Error: %s", err)
-            logger.debug("  Stack trace:", exc_info=True)
 
-    for wp_device in wp_devices:
-        wp_device.stop()
     if mqtt_publisher is not None:
         mqtt_publisher.stop()
     if ldb is not None:
