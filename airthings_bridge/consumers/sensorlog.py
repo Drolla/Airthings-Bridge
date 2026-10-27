@@ -26,28 +26,6 @@ _NAN = float("nan")
 _V1_INFO_LINE_PREFIX = "logdbcsv,"
 
 
-def parse_decimations(definitions: dict | None) -> list[tuple[float, int]]:
-    """Parse the graph decimation definitions.
-
-    The definitions are a dictionary of data ages in seconds and decimation
-    factors. Data older than an age is decimated by the related factor.
-    Example: {691200: 8, 90000: 3}. Raises ValueError for invalid definitions.
-    """
-    if not definitions:
-        return []
-    decimations = []
-    for age, factor in definitions.items():
-        if isinstance(age, bool) or not isinstance(age, int | float) or \
-                age <= 0 or not isinstance(factor, int) or factor < 1:
-            raise ValueError(
-                    f"Invalid graph decimation definition '{age}: {factor}'. "
-                    "Use '<data age in seconds>: <decimation factor>', e.g. "
-                    "'691200: 8' (format changed with version 2.0.0, see "
-                    "README.md)")
-        decimations.append((float(age), factor))
-    return decimations
-
-
 class SensorLog:
     """Thread safe sensor data log.
 
@@ -133,8 +111,8 @@ class SensorLog:
 
         Args:
             label_patterns: Regular expression(s) selecting the labels
-            decimations: Decimation definitions provided by
-                parse_decimations(), to reduce the resolution of older data
+            decimations: (data age in seconds, decimation factor) pairs, to
+                reduce the resolution of older data
 
         The CSV data has a header line ("Time" followed by the labels),
         formats the time as "YYYY/MM/DD hh:mm" (local time), and leaves

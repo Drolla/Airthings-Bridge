@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from airthings_bridge.consumers.sensorlog import SensorLog, parse_decimations
+from airthings_bridge.consumers.sensorlog import SensorLog
 
 LABEL_SPECS = {"office": ["temperature", "humidity"],
                "living": ["temperature", "radon_st"]}
@@ -102,25 +102,6 @@ def test_csv_decimation_averages_older_data(sensor_log):
     # Samples older than 450s (i=0..5) are averaged by pairs
     assert [line.split(",")[1] for line in lines[1:]] == \
         ["0.5", "2.5", "4.5", "6", "7", "8", "9"]
-
-
-# ---------- decimation definitions ----------
-
-def test_parse_decimations():
-    assert parse_decimations(None) == []
-    assert parse_decimations({691200: 8, 90000: 3}) == [
-        (691200.0, 8), (90000.0, 3)]
-
-
-@pytest.mark.parametrize("definitions", [
-    {-1.0: 8, -5760: 3, -750: 1},  # Format of version 1.x
-    {3600: 0},
-    {3600: 2.5},
-    {"1h": 2},
-])
-def test_parse_decimations_rejects_invalid_definitions(definitions):
-    with pytest.raises(ValueError, match="2.0.0"):
-        parse_decimations(definitions)
 
 
 # ---------- thread safety ----------
