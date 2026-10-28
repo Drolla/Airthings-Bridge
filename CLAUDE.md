@@ -23,11 +23,11 @@
 
 ## Branches
 
-- Do all work on branches. `version-2.0.0` is the principal branch; topic
-  work goes into `version-2.0.0-<topic>` sub-branches that are merged into
-  it with `git merge --no-ff`.
-- These branches may be committed and pushed. Never merge into
-  `master`/`main`.
+- `main` is the principal branch. Do topic work in `<topic>` branches,
+  merged into `main` with `git merge --no-ff`.
+- Topic branches and `main` may be committed and pushed.
+- The project is forked from https://github.com/Drolla/WavePlus_Bridge
+  (version 1.x), which doesn't receive the 2.0 changes.
 
 ## Checks
 

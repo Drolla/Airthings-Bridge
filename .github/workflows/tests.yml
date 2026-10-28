@@ -2,9 +2,8 @@ name: Tests
 
 "on":
   push:
-    branches: [master, "version-*"]
   pull_request:
-    branches: [master]
+    branches: [main]
 
 jobs:
   pytest:
