@@ -45,10 +45,6 @@ Then open http://\<Raspberry Pi address\>:8080 in a browser.
 * [Debugging](docs/debugging.md): device communication, mail, MQTT, logging
 * [Changelog](CHANGELOG.md)
 
-## Related topics
-
-* [Correlation between Airthings Wave Plus and Corentium Plus Devices](https://github.com/Drolla/WavePlus_Bridge/wiki/Radon-Measurement-Correlation)
-
 ## License
 
 MIT, see [LICENSE](LICENSE). The device access is based on
