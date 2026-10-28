@@ -1,7 +1,6 @@
 # Airthings Bridge systemd service
 #
-# Installation: See section 'Setup the Airthings Bridge as a Service' of
-# README.md.
+# Installation: See section 'Service' of docs/installation.md.
 
 [Unit]
 Description=Airthings Bridge

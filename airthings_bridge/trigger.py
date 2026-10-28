@@ -32,7 +32,7 @@ class Trigger:
         above/below:
             A triggering happens if a sensor value is above or below a certain
             level. In this sense, the condition can be specified with the
-            keywords 'above' or 'bellow' and a single threshold level (double)
+            keywords 'above' or 'below' and a single threshold level (double)
             or as a list of threshold levels (list of doubles).
         for:
             This delays the trigger until the specified condition is valid for

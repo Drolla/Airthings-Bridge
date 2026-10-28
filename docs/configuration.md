@@ -75,13 +75,76 @@ graph_decimations:
 
 ### Mail alerts
 
-An alert has one or multiple sources (`<device name>:<value>`), a trigger
-(`above` or `below` one or multiple levels, optionally `for` a time span and
-with a `min_interval` between repeated alerts), and one or multiple actions
-(`mail` or `print`). Mail alerts require the `smtp_server` configuration. See
-the template for details.
+Mail alerts require the `smtp_server` configuration:
+
+| Key                | Default    | Description                                             |
+|--------------------|------------|---------------------------------------------------------|
+| `server`           | (required) | SMTP server address                                     |
+| `port`             | 587        | SMTP server port, e.g. 25, 465, 587                     |
+| `security`         | none       | `SSL`, or `TLS` (STARTTLS); the certificate is verified |
+| `user`, `password` | none       | Login                                                   |
+
+An alert has:
+
+* `sources`: one or multiple values, `<device name>:<value>`
+* `trigger`: the condition
+  * `above` or `below`: a level, or a list of levels
+  * `for`: time span (seconds or `HH:MM:SS`) the condition has to last,
+    applied to each level
+  * `min_interval`: minimum time between repeated alerts, ignored if a
+    higher level is reached
+* `actions`: one or multiple actions
+  * `mail`: `from`, `to` (address or list), `subject`, `message`
+  * `print`: `message`, logged with level INFO
+
+In `message`, `%v` is replaced by the value, `%d` by the device and `%s` by
+the value name.
+
+```
+smtp_server:
+    server: mail.server.com
+    port: 465
+    security: SSL
+    user: bridge@myhome.com
+    password: secret
+
+alerts:
+    -   sources: [office:radon_st, living:radon_st]
+        trigger:
+            above: [100, 200, 400]
+            for: "00:30:00"
+            min_interval: "12:00:00"
+        actions:
+            -   mail:
+                    from: bridge@myhome.com
+                    to: [liam@family.com, olivia@family.com]
+                    subject: Radon alert
+                    message: "Radon level %v Bq/m3 (%d)"
+            -   print:
+                    message: "Radon level %v Bq/m3 (%d)"
+```
 
 ### MQTT publishing
+
+| Key         | Default                    | Description                                       |
+|-------------|----------------------------|---------------------------------------------------|
+| `host`      | (required)                 | MQTT broker address                               |
+| `port`      | 1883                       | MQTT broker port                                  |
+| `topic`     | none                       | Topic root                                        |
+| `publish`   | (required)                 | Published values per device; `'*'` selects all values, or all devices |
+| `client_id` | random                     | Client ID                                         |
+| `auth`      | none                       | `username`, `password`                            |
+| `tls`       | none                       | `ca_certs`, `certfile`, `keyfile`, `tls_version`, `ciphers`, `insecure` |
+| `will`      | 'Connection lost' to `<topic>/status` | `topic`, `payload`, `qos`, `retain`    |
+
+```
+mqtt:
+    host: test.mosquitto.org
+    topic: my_home/airthings_bridge
+    publish:
+        office: [radon_st, radon_lt]
+        living: '*'
+```
 
 The selected values are published, all retained, to the following topics:
 
@@ -104,3 +167,10 @@ The bridge reconnects automatically if the connection to the broker is lost.
 | `/csv`               | Logged data (CSV), selected by glob patterns separated by `;` (`/csv?*:temp*;*:hum*`) or by a regular expression (`/csv?re=office:.*`) |
 | `/meta`              | Measurements and devices (JSON), used by the web UI                |
 | `/eval?<expression>` | Developer mode only: result of a Python expression                 |
+
+`/data` response (times in seconds since epoch):
+
+```
+{"current_time": 1761670800,
+ "devices": {"office": {"humidity": 59.0, "radon_st": 34, ..., "update_time": 1761670790}}}
+```
