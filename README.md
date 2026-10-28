@@ -1,5 +1,9 @@
 # Airthings Bridge to Wifi/LAN and MQTT
 
+[![Airthings](https://img.shields.io/badge/devices-Airthings-0072CE)](docs/devices.md)
+[![Python](https://img.shields.io/badge/python-%3E%3D3.11-blue)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 The Airthings Bridge is the successor of the
 [Wave Plus Bridge](https://github.com/Drolla/WavePlus_Bridge) (version 1.x),
 forked from it for version 2.0.
