@@ -5,7 +5,7 @@ The Airthings Bridge is the successor of the
 forked from it for version 2.0.
 
 > 🟡 **Draft:** this project has not been verified yet on real devices. This
-> will happen in November.
+> will happen in November 2026.
 
 The Airthings Bridge connects one or multiple
 **Airthings** sensors to the **Wifi/LAN** network, using a **Raspberry Pi**
