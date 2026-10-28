@@ -2,6 +2,10 @@
 
 ## Raspberry Pi
 
+Install Raspberry Pi OS (Lite is enough) with
+[Raspberry Pi Imager](https://www.raspberrypi.com/software/), which can also
+set up the Wi-Fi, the user and SSH.
+
 The bridge runs on any Raspberry Pi with Bluetooth Low Energy (BLE), built
 in or via an adapter, and Raspberry Pi OS Bookworm or later (Python 3.11 or
 later). Update the system and enable the Bluetooth interface:

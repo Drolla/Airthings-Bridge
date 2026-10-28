@@ -1,209 +1,107 @@
-######## Basic Airthings Bridge configuration ########
-#
-# The basic configuration includes the specification of the Airthings devices
-# serial numbers, the sensor update period, the HTTP port and optionally the log
-# file.
+# Airthings Bridge configuration, see docs/configuration.md.
+# Comment out the optional settings that are not needed.
 
-# Update period: Time in seconds between reading the sensor values
-period: 120
+######## Basic configuration ########
 
-# Number of extra attempts to read from the device after a connection failure
-retries: 3
-
-# Amount of time in seconds to wait before attempting reconnection
-retry_delay: 1
-
-# SN: List of 10-digit serial number of one or multiple Airthings devices (see 
-# under the magnetic backplate. Each number can be combined with a device 
-# nickname, separated by a column from the serial number 
-# (e.g. "2930123456, my_office").
+# Serial numbers (10 digits, under the magnetic backplate), each optionally
+# followed by a device name, separated by a comma
 sn:
    - 2930123456, my_office
    - 2930123457, my_living
 
-# HTTP/Web server port: If no HTTP/web server is required, comment the 
-# following line.
+# Time in seconds between reading the devices
+period: 120
+
+# Extra attempts to read a device, and the time in seconds between them
+retries: 3
+retry_delay: 1
+
+# HTTP port of the web UI (optional)
 port: 80
 
-# Log file: Comment the following line to log all information to stdout.
-# For more sophisticated logging configurations, for example for debugging, see
-# docs/debugging.md.
+# Log file (optional, default: stdout), or a logging configuration, see
+# docs/debugging.md#logging
 log: /var/log/airthings_bridge/airthings_bridge.log
 
 
-######## CSV database and graph generation ########
-#
-# The CSV database is used to generate data graphs on the HTML page and to allow
-# processing the data in external tools. The CSV file is reloaded after a
-# restart, which guarantees that the generated graphs shows also the previously
-# recorded data.
+######## CSV file and graphs ########
 
-# CSV log file: If no CSV data logging is required, comment the following line.
+# CSV file of the logged data (optional)
 csv: /var/lib/airthings_bridge/airthings_bridge.csv
 
-# Data retention time in seconds (to limit the memory use)
+# Time in seconds the logged data is kept
 data_retention: 2678400 # 31 days
 
-# The graph decimation reduces the CSV data used to generate the graphs. Data
-# older than the specified age (in seconds) is averaged over the specified
-# number of records (decimation factor).
+# Graph data older than the age (seconds) is averaged over the number of
+# records (decimation factor)
 graph_decimations:
    691200: 8  # older than 8 days
    90000: 3   # older than 25 hours
 
 
-######## EMail alerts ########
+######## Mail alerts, see docs/configuration.md#mail-alerts ########
 
-# Email alerts can be sent when certain conditions are met (e.g. radon level 
-# higher than 100 Bq/m3 for more than 1 hour). To send such email alerts, an
-# SMTP server has to be specified and one or multiple alert triggers defined.
-
-# SMTP server definition to send mail alerts
 smtp_server:
-    # Mail server address
     server: mail.server.com
-
-    # Mail server port, e.g. 25, 465, 587
     port: 465
-    
-    # Options: SSL, TLS, or no definition (default). The server
-    # certificate is verified for SSL and TLS.
-    security: SSL
-    
-    # Login user name
+    security: SSL  # SSL, TLS or none
     user: wave@plus.com
-    
-    # Login user password
     password: bridge123
 
-
-# Mail (and print) alerts
-# One or multiple alerts can be defined. Each alert has one or multiple 
-# sources (device sensors), a trigger and one or multiple actions.
+# Placeholders in 'message': %v: value, %d: device, %s: value name
 alerts:
-    # The first example of an email alert configuration uses the simplest form 
-    # (single source, single threshold level, single mail destination address).
-    # Comprehensive explanations about the parameters are given in the 2nd
-    # example.
-    # The alert configuration is added in form of a list (starting with "-") to 
-    # allow adding additional configurations:
-    -   sources:
-            my_office:radon_st
+    # Simplest form: one source, one level, one action
+    -   sources: my_office:radon_st
         trigger:
             above: 150
-            for: "00:30:00"
-            min_interval: "12:00:00"
         actions:
             mail:
                 from: wave.plus@myhome.com
                 to: sophia.millar@family.com
 
-    # The second alert configuration uses multiple sources, trigger levels and 
-    # mail destination addresses. It provides all necessary information to 
-    # understand the configuration options:
-
-    -   # At least one source (device:sensors) has to be defined as trigger
-        # source. The example shows the definition of multiple sources 
-        # (list form):
-        sources:
-            - my_office:radon_st
-            - my_living:radon_st
-
-        # Various parameters allow defining the exact conditions when a
-        # triggering should occur:
+    -   sources: [my_office:radon_st, my_living:radon_st]
         trigger:
-            # A triggering happens if a sensor value is above or below a 
-            # certain level. In this sense, the condition can be specified 
-            # with the keywords 'above' or 'bellow' and a single threshold
-            # level, or as the example shows, as a list of threshold levels.
-            above: [100, 200, 400, 1000]
-
-            # 'For' delays the trigger until the specified condition is valid
-            # for a time span specified either in seconds, or in the format
-            # Hours:Minutes:Seconds. The trigger delay is applied individually
-            # for each specified trigger threshold level:
-            for: "00:30:00"
-
-            # 'min_interval' allows specifying a minimum re-triggering 
-            # interval. The provided value is specified either in seconds, or 
-            # in the format Hours:Minutes:Seconds. The minimum re-triggering
-            # interval is not respected if the re-triggering is due to a
-            # higher trigger threshold level than the previously triggering.
-            min_interval: "12:00:00"
-
-        # One or multiple actions can be specified. An action can be a mail 
-        # alert, or a message to the stdout and to the log file.
-        # Both mail and print alerts allow customizing the alert information 
-        # with the keyword 'message'. The specified message may contain the
-        # following placeholders: %v: sensor value, %d: device, %s: device 
-        # sensor.
-        # The example below shows the definition of a mail alert and a print 
-        # alert (list starting with "-"):
+            above: [100, 200, 400, 1000]  # or 'below', a level or a list
+            for: "00:30:00"               # time span the condition has to last
+            min_interval: "12:00:00"      # minimum time between repeated alerts
         actions:
             -   mail:
-                    # Author mail address
                     from: wave.plus@myhome.com
-
-                    # Single or multiple destination addresses. Multiple 
-                    # addresses as shown in the example are provided in form 
-                    # of a list
-                    to:
-                        - liam.smith@family.com
-                        - olivia.brown@family.com
-
-                    # Mail subject
-                    subject: 'Radon alert'
-
-                    # Mail message, see above
+                    to: [liam.smith@family.com, olivia.brown@family.com]
+                    subject: Radon alert
                     message: |-
                         Radon level is too high!
                         Sensor: %d, %s
                         Level: %v
             -   print:
-                    # Print message, see above
-                    message: |-
-                        Radon level is too high! Sensor: %d, %s; Level: %v
+                    message: "Radon level is too high! Sensor: %d, %s; Level: %v"
 
 
-######## MQTT Publishing ########
+######## MQTT publishing, see docs/configuration.md#mqtt-publishing ########
 
-# The sensor data can be published to an MQTT server. To do so, the MQTT broker
-# has to be specified.
 mqtt:
-    # MQTT broker host IP address
     host: test.mosquitto.org
-
-    # MQTT broker port
     port: 1883
-
-    # Optional client ID
     # client_id: clientId-clxHpr9
-    
-    # Optional authentication data composed by a user name and a password
     # auth:
     #     username: <username>
     #     password: <password>
-    
-    # Optional TLS configuration parameters. If present, ca_certs is required, 
-    # all other all other parameters are optional, which results in the client 
-    # using the default behavior.
     # tls:
     #     ca_certs: <ca_certs>
     #     certfile: <certfile>
     #     keyfile: <keyfile>
     #     tls_version: <tls_version>
     #     ciphers: <ciphers>
-    
-    # MQTT topic root: The topics for the different parameters to publish will 
-    # be composed in the following way: <topic root>/<device>/<sensor>
+    #     insecure: False
+    # will:
+    #     topic: my_nice_home/airthings_bridge/status
+    #     payload: Connection lost
+    #     retain: True
+
+    # Topic root, the values are published to <topic>/<device>/<value>
     topic: my_nice_home/airthings_bridge
 
-    # List the devices and their values that should be published. A
-    # list of sensors to publish can be assigned to each device:
-    #    <devicename>: ['<sensor1>', '<sensor2'>, ...]
-    # The wildcard character '*' (enclosed in '') can be used to select all 
-    # sensors:
-    #    <devicename>: '*'
+    # Published values per device; '*' selects all values, or all devices
     publish:
         my_office: [radon_st, radon_lt]
         my_living: '*'
@@ -211,9 +109,9 @@ mqtt:
 
 ######## Test support ########
 
-# Uncomment the following lines to enable test features
+# Emulated devices
 # emulation: True
 
-# Developer mode enables the /eval HTTP request that evaluates any provided
-# Python expression. Never enable it on a network you don't trust!
+# Developer mode enables the /eval HTTP request that evaluates any Python
+# expression. Never enable it on a network you don't trust!
 # developer: True
