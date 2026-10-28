@@ -30,7 +30,7 @@ Install the bridge into a Python virtual environment in /opt/airthings_bridge
 
 ```
 sudo python3 -m venv /opt/airthings_bridge
-sudo /opt/airthings_bridge/bin/pip install https://github.com/Drolla/WavePlus_Bridge/archive/master.zip
+sudo /opt/airthings_bridge/bin/pip install https://github.com/Drolla/Airthings-Bridge/archive/refs/heads/main.zip
 ```
 
 Check that the devices are in range:
@@ -43,7 +43,7 @@ Download the configuration template and adapt it, see
 [Configuration](configuration.md):
 
 ```
-sudo wget -O /opt/airthings_bridge/airthings_bridge.yaml https://raw.githubusercontent.com/Drolla/WavePlus_Bridge/master/airthings_bridge.yaml
+sudo wget -O /opt/airthings_bridge/airthings_bridge.yaml https://raw.githubusercontent.com/Drolla/Airthings-Bridge/main/airthings_bridge.yaml
 sudo nano /opt/airthings_bridge/airthings_bridge.yaml
 ```
 
@@ -65,7 +65,7 @@ the service file, and start the service:
 
 ```
 sudo useradd --system --no-create-home airthings_bridge
-sudo wget -O /etc/systemd/system/airthings_bridge.service https://raw.githubusercontent.com/Drolla/WavePlus_Bridge/master/systemd/airthings_bridge.service
+sudo wget -O /etc/systemd/system/airthings_bridge.service https://raw.githubusercontent.com/Drolla/Airthings-Bridge/main/systemd/airthings_bridge.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now airthings_bridge
 ```
@@ -86,7 +86,7 @@ sudo systemctl disable --now airthings_bridge
 ## Update
 
 ```
-sudo /opt/airthings_bridge/bin/pip install --upgrade https://github.com/Drolla/WavePlus_Bridge/archive/master.zip
+sudo /opt/airthings_bridge/bin/pip install --upgrade https://github.com/Drolla/Airthings-Bridge/archive/refs/heads/main.zip
 sudo systemctl restart airthings_bridge
 ```
 

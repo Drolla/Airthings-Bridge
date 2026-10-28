@@ -61,4 +61,4 @@ The Wave Plus Bridge becomes the Airthings Bridge.
 
 ## [1.x]
 
-Wave Plus Bridge, see the Git history of the master branch.
+Wave Plus Bridge, see [WavePlus_Bridge](https://github.com/Drolla/WavePlus_Bridge).

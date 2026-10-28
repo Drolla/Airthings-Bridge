@@ -1,6 +1,6 @@
 # Airthings Bridge to Wifi/LAN and MQTT
 
-The Airthings Bridge (formerly Wave Plus Bridge) connects one or multiple
+The Airthings Bridge connects one or multiple
 **Airthings** sensors to the **Wifi/LAN** network, using a **Raspberry Pi**
 with Bluetooth Low Energy (BLE):
 
@@ -15,13 +15,17 @@ Enhance and Corentium Home 2, see [Devices](docs/devices.md).
 
 The bridge runs with Python 3.11 or later, as systemd service.
 
+The Airthings Bridge is the successor of the
+[Wave Plus Bridge](https://github.com/Drolla/WavePlus_Bridge) (version 1.x),
+forked from it for version 2.0.
+
 ![Concept picture](Concept.png)
 
 ## Quick start
 
 ```
 sudo python3 -m venv /opt/airthings_bridge
-sudo /opt/airthings_bridge/bin/pip install https://github.com/Drolla/WavePlus_Bridge/archive/master.zip
+sudo /opt/airthings_bridge/bin/pip install https://github.com/Drolla/Airthings-Bridge/archive/refs/heads/main.zip
 /opt/airthings_bridge/bin/airthings-bridge scan
 /opt/airthings_bridge/bin/airthings-bridge "2930123456, office" --port 8080 --csv office.csv
 ```
