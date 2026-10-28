@@ -1,0 +1,25 @@
+# Airthings Bridge systemd service
+#
+# Installation: See section 'Service' of docs/installation.md.
+
+[Unit]
+Description=Airthings Bridge
+Wants=network-online.target
+After=bluetooth.target network-online.target
+
+[Service]
+ExecStart=/opt/airthings_bridge/bin/airthings-bridge --config /opt/airthings_bridge/airthings_bridge.yaml
+Restart=on-failure
+RestartSec=10
+
+# Run as dedicated user with access to Bluetooth LE, allowed to open the
+# HTTP port 80, and with writable /var/lib/airthings_bridge (CSV data) and
+# /var/log/airthings_bridge (log file) directories.
+User=airthings_bridge
+SupplementaryGroups=bluetooth
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+StateDirectory=airthings_bridge
+LogsDirectory=airthings_bridge
+
+[Install]
+WantedBy=multi-user.target

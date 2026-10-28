@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>Airthings Bridge</title>
+	<script type="text/javascript" src="airthings_bridge.js"></script>
+	<script type="text/javascript" src="dygraph.min.js"></script>
+	<link rel="stylesheet" href="dygraph.min.css" />
+	<script type="text/javascript" src="dygraph_synchronizer.js"></script>
+	<script>
+		window.addEventListener('load', function () {
+			var link = document.createElement('link');
+			link.rel = 'stylesheet';
+			link.type = 'text/css';
+			if (window.screen.width<800) {
+				link.href = 'airthings_bridge_mobile.css';
+				DisplayType="Mobile";
+			} else {
+				link.href = 'airthings_bridge.css';
+				DisplayType="Classic";
+			}
+			document.head.appendChild(link);
+			LoadPage("current_data","graphs");
+		}, false);
+	</script>
+</head>
+<body>
+	<div id="header"><h1>Airthings Bridge</h1></div>
+	<div id="curent_data_section">
+		<h1>Current data</h1>
+		<div id="current_data">
+		</div>
+	</div>
+	<div id="graphs_section">
+		<h1>Graphs</h1>
+		<div id="graphs">
+		</div>
+	</div>
+	<div id="footer">Airthings Bridge</div>
+</body>
+</html>

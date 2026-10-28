@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "airthings-bridge"
+dynamic = ["version"]
+description = "Bridge from Airthings BLE sensors to HTTP, CSV logging, mail alerts and MQTT"
+readme = "README.md"
+license = {file = "LICENSE"}
+authors = [{name = "Andreas Drollinger"}]
+requires-python = ">=3.11"
+dependencies = [
+    "PyYAML>=6.0",
+    "bleak>=3.0",
+    "aiohttp>=3.9",
+    "aiomqtt>=2.0",
+    "aiosmtplib>=3.0",
+    "cbor2>=5.4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff", "mypy", "types-PyYAML"]
+
+[project.scripts]
+airthings-bridge = "airthings_bridge.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Drolla/Airthings-Bridge"
+
+[tool.setuptools.dynamic]
+version = {attr = "airthings_bridge.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["airthings_bridge*"]
+
+[tool.setuptools.package-data]
+"airthings_bridge.web" = ["static/*"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "UP", "B", "SIM", "D"]
+ignore = ["D1"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "pep257"
+
+[tool.ruff.lint.per-file-ignores]
+# Verbatim copies of the phc logdb module and its tests
+"airthings_bridge/logdb.py" = ["ALL"]
+"tests/test_logdb.py" = ["ALL"]
+
+[tool.mypy]
+files = ["airthings_bridge"]
+python_version = "3.11"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Verbatim copy of the phc logdb module
+module = "airthings_bridge.logdb"
+ignore_errors = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

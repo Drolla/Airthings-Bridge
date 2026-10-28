@@ -1,6 +1,6 @@
-######## Basic WavePlus Bridge configuration ########
+######## Basic Airthings Bridge configuration ########
 #
-# The basic configuration includes the specification of the Wave Plus devices
+# The basic configuration includes the specification of the Airthings devices
 # serial numbers, the sensor update period, the HTTP port and optionally the log
 # file.
 
@@ -13,13 +13,13 @@ retries: 3
 # Amount of time in seconds to wait before attempting reconnection
 retry_delay: 1
 
-# SN: List of 10-digit serial number of one or multiple Wave Plus devices (see 
+# SN: List of 10-digit serial number of one or multiple Airthings devices (see 
 # under the magnetic backplate. Each number can be combined with a device 
 # nickname, separated by a column from the serial number 
-# (e.g. "2931234567, my_office").
+# (e.g. "2930123456, my_office").
 sn:
-   - 2931234567, my_office
-   - 2931234569, my_living
+   - 2930123456, my_office
+   - 2930123457, my_living
 
 # HTTP/Web server port: If no HTTP/web server is required, comment the 
 # following line.
@@ -27,8 +27,8 @@ port: 80
 
 # Log file: Comment the following line to log all information to stdout.
 # For more sophisticated logging configurations, for example for debugging, see
-# section 'Debugging' of README.md.
-#log: waveplus_bridge_test.log
+# docs/debugging.md.
+#log: airthings_bridge_test.log
 
 log:
     version: 1
@@ -43,11 +43,11 @@ log:
         class: logging.StreamHandler
         stream: ext://sys.stdout
     loggers:
-      __main__:
+      airthings_bridge.bridge:
         level: INFO
         handlers: [console]
         propagate: no
-      waveplus_emulation:
+      airthings_bridge.emulation:
         level: DEBUG
         handlers: [console]
         propagate: no
@@ -64,17 +64,17 @@ log:
 # recorded data.
 
 # CSV log file: If no CSV data logging is required, comment the following line.
-csv: waveplus_bridge_test.csv
+csv: airthings_bridge_test.csv
 
 # Data retention time in seconds (to limit the memory use)
 data_retention: 2678400 # 31 days
 
-# The graph decimation allows reducing the CSV data used to generate the graphs 
-# (see logdb.get_csv)
+# The graph decimation reduces the CSV data used to generate the graphs. Data
+# older than the specified age (in seconds) is averaged over the specified
+# number of records (decimation factor).
 graph_decimations:
-   -1.0: 8  # -31 days (full range)
-   -5760: 3 # - 8 days
-   -750: 1  # - 25 hours
+   691200: 8  # older than 8 days
+   90000: 3   # older than 25 hours
 
 
 ######## EMail alerts ########
@@ -220,9 +220,9 @@ mqtt:
     
     # MQTT topic root: The topics for the different parameters to publish will 
     # be composed in the following way: <topic root>/<device>/<sensor>
-    topic: my_nice_home/waveplus_bridge
+    topic: my_nice_home/airthings_bridge
 
-    # List the Wave Plus devices and their sensors that should be published. A
+    # List the devices and their values that should be published. A
     # list of sensors to publish can be assigned to each device:
     #    <devicename>: ['<sensor1>', '<sensor2'>, ...]
     # The wildcard character '*' (enclosed in '') can be used to select all 
@@ -237,3 +237,4 @@ mqtt:
 
 # Uncomment the following lines to enable test features
 emulation: True
+developer: True

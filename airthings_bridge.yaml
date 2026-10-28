@@ -1,0 +1,117 @@
+# Airthings Bridge configuration, see docs/configuration.md.
+# Comment out the optional settings that are not needed.
+
+######## Basic configuration ########
+
+# Serial numbers (10 digits, under the magnetic backplate), each optionally
+# followed by a device name, separated by a comma
+sn:
+   - 2930123456, my_office
+   - 2930123457, my_living
+
+# Time in seconds between reading the devices
+period: 120
+
+# Extra attempts to read a device, and the time in seconds between them
+retries: 3
+retry_delay: 1
+
+# HTTP port of the web UI (optional)
+port: 80
+
+# Log file (optional, default: stdout), or a logging configuration, see
+# docs/debugging.md#logging
+log: /var/log/airthings_bridge/airthings_bridge.log
+
+
+######## CSV file and graphs ########
+
+# CSV file of the logged data (optional)
+csv: /var/lib/airthings_bridge/airthings_bridge.csv
+
+# Time in seconds the logged data is kept
+data_retention: 2678400 # 31 days
+
+# Graph data older than the age (seconds) is averaged over the number of
+# records (decimation factor)
+graph_decimations:
+   691200: 8  # older than 8 days
+   90000: 3   # older than 25 hours
+
+
+######## Mail alerts, see docs/configuration.md#mail-alerts ########
+
+smtp_server:
+    server: mail.server.com
+    port: 465
+    security: SSL  # SSL, TLS or none
+    user: wave@plus.com
+    password: bridge123
+
+# Placeholders in 'message': %v: value, %d: device, %s: value name
+alerts:
+    # Simplest form: one source, one level, one action
+    -   sources: my_office:radon_st
+        trigger:
+            above: 150
+        actions:
+            mail:
+                from: wave.plus@myhome.com
+                to: sophia.millar@family.com
+
+    -   sources: [my_office:radon_st, my_living:radon_st]
+        trigger:
+            above: [100, 200, 400, 1000]  # or 'below', a level or a list
+            for: "00:30:00"               # time span the condition has to last
+            min_interval: "12:00:00"      # minimum time between repeated alerts
+        actions:
+            -   mail:
+                    from: wave.plus@myhome.com
+                    to: [liam.smith@family.com, olivia.brown@family.com]
+                    subject: Radon alert
+                    message: |-
+                        Radon level is too high!
+                        Sensor: %d, %s
+                        Level: %v
+            -   print:
+                    message: "Radon level is too high! Sensor: %d, %s; Level: %v"
+
+
+######## MQTT publishing, see docs/configuration.md#mqtt-publishing ########
+
+mqtt:
+    host: test.mosquitto.org
+    port: 1883
+    # client_id: clientId-clxHpr9
+    # auth:
+    #     username: <username>
+    #     password: <password>
+    # tls:
+    #     ca_certs: <ca_certs>
+    #     certfile: <certfile>
+    #     keyfile: <keyfile>
+    #     tls_version: <tls_version>
+    #     ciphers: <ciphers>
+    #     insecure: False
+    # will:
+    #     topic: my_nice_home/airthings_bridge/status
+    #     payload: Connection lost
+    #     retain: True
+
+    # Topic root, the values are published to <topic>/<device>/<value>
+    topic: my_nice_home/airthings_bridge
+
+    # Published values per device; '*' selects all values, or all devices
+    publish:
+        my_office: [radon_st, radon_lt]
+        my_living: '*'
+
+
+######## Test support ########
+
+# Emulated devices
+# emulation: True
+
+# Developer mode enables the /eval HTTP request that evaluates any Python
+# expression. Never enable it on a network you don't trust!
+# developer: True

@@ -1,3 +1,0 @@
-pyYAML
-bluepy
-paho-mqtt
