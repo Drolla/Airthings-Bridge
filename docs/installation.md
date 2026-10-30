@@ -8,20 +8,14 @@ set up the Wi-Fi, the user and SSH.
 
 The bridge runs on any Raspberry Pi with Bluetooth Low Energy (BLE), built
 in or via an adapter, and Raspberry Pi OS Bookworm or later (Python 3.11 or
-later). Update the system and enable the Bluetooth interface:
+later). Update the system, install the required packages and enable the
+Bluetooth interface:
 
 ```
 sudo apt update
 sudo apt full-upgrade
+sudo apt install -y python3-venv git
 sudo bluetoothctl power on
-```
-
-The BLE access doesn't require root privileges, but membership of the
-`bluetooth` group. Add your user to this group to run the commands of
-[Debugging](debugging.md) (log out and in again to apply it):
-
-```
-sudo usermod -aG bluetooth $USER
 ```
 
 The devices should run the latest firmware. Connect them once to the
@@ -29,47 +23,62 @@ Airthings app to update it.
 
 ## Airthings Bridge
 
-Install the bridge into a Python virtual environment in /opt/airthings_bridge
-(Raspberry Pi OS doesn't allow installing Python packages globally with pip):
+The bridge is a git clone in /opt/airthings_bridge, with its Python virtual
+environment in `.venv`. It runs under a dedicated user without root
+privileges, and writes its CSV file and log file into /var/airthings_bridge.
+
+Create the user, which has access to BLE, and the data directory:
 
 ```
-sudo python3 -m venv /opt/airthings_bridge
-sudo /opt/airthings_bridge/bin/pip install https://github.com/Drolla/Airthings-Bridge/archive/refs/heads/main.zip
+sudo useradd --system --home-dir /opt/airthings_bridge --shell /usr/sbin/nologin --groups bluetooth airthings_bridge
+sudo install -d -o airthings_bridge -g airthings_bridge /var/airthings_bridge
+```
+
+Fetch and install the bridge:
+
+```
+sudo git clone https://github.com/Drolla/Airthings-Bridge.git /opt/airthings_bridge
+sudo chown -R airthings_bridge: /opt/airthings_bridge
+sudo -u airthings_bridge -H bash -c '
+  cd /opt/airthings_bridge
+  python3 -m venv .venv
+  .venv/bin/pip install -e .
+'
 ```
 
 Check that the devices are in range:
 
 ```
-/opt/airthings_bridge/bin/airthings-bridge scan
+sudo -u airthings_bridge /opt/airthings_bridge/.venv/bin/airthings-bridge scan
 ```
 
-Download the configuration template and adapt it, see
-[Configuration](configuration.md):
+Copy the configuration template and adapt it, see
+[Configuration](configuration.md). The file may contain passwords, so only
+the user airthings_bridge can read it:
 
 ```
-sudo wget -O /opt/airthings_bridge/airthings_bridge.yaml https://raw.githubusercontent.com/Drolla/Airthings-Bridge/main/airthings_bridge.yaml
-sudo nano /opt/airthings_bridge/airthings_bridge.yaml
+sudo -u airthings_bridge cp /opt/airthings_bridge/airthings_bridge.yaml /opt/airthings_bridge/config.yaml
+sudo chmod 600 /opt/airthings_bridge/config.yaml
+sudo nano /opt/airthings_bridge/config.yaml
 ```
 
-Start the bridge for a first test, with the log written to the terminal:
+Start the bridge for a first test, with the log written to the terminal.
+Only the service may open port 80, so the test uses port 8080:
 
 ```
-sudo /opt/airthings_bridge/bin/airthings-bridge \
-       --config /opt/airthings_bridge/airthings_bridge.yaml --log ""
+sudo -u airthings_bridge /opt/airthings_bridge/.venv/bin/airthings-bridge \
+       --config /opt/airthings_bridge/config.yaml --port 8080 --log ""
 ```
 
-Open the web page http://\<Raspberry Pi address\>:\<port\> in a browser.
+Open the web page http://\<Raspberry Pi address\>:8080 in a browser.
 
 ## Service
 
-The bridge runs as systemd service under a dedicated user, which has access
-to BLE, may open the HTTP port 80, and writes into /var/lib/airthings_bridge
-(CSV file) and /var/log/airthings_bridge (log file). Create the user, install
-the service file, and start the service:
+The systemd service runs the bridge as user airthings_bridge, and may open
+the HTTP port 80. Install and start it:
 
 ```
-sudo useradd --system --no-create-home airthings_bridge
-sudo wget -O /etc/systemd/system/airthings_bridge.service https://raw.githubusercontent.com/Drolla/Airthings-Bridge/main/systemd/airthings_bridge.service
+sudo cp /opt/airthings_bridge/systemd/airthings_bridge.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now airthings_bridge
 ```
@@ -90,8 +99,13 @@ sudo systemctl disable --now airthings_bridge
 ## Update
 
 ```
-sudo /opt/airthings_bridge/bin/pip install --upgrade https://github.com/Drolla/Airthings-Bridge/archive/refs/heads/main.zip
-sudo systemctl restart airthings_bridge
+sudo systemctl stop airthings_bridge
+sudo -u airthings_bridge -H bash -c '
+  cd /opt/airthings_bridge
+  git pull
+  .venv/bin/pip install -e .
+'
+sudo systemctl start airthings_bridge
 ```
 
 ## Upgrade from version 1.x (Wave Plus Bridge)
@@ -106,14 +120,13 @@ sudo systemctl restart airthings_bridge
 
 * Install version 2 as described above, without starting the service yet.
   Take over the settings of /opt/waveplus_bridge/waveplus_bridge.yaml into
-  the new configuration file, and update the graph decimations, see
+  `config.yaml`, and update the graph decimations, see
   [Configuration](configuration.md#csv-file-and-graphs).
 * Move the CSV file to the new location:
 
   ```
-  sudo mkdir -p /var/lib/airthings_bridge
-  sudo mv /var/log/waveplus_bridge.csv /var/lib/airthings_bridge/airthings_bridge.csv
-  sudo chown -R airthings_bridge: /var/lib/airthings_bridge
+  sudo mv /var/log/waveplus_bridge.csv /var/airthings_bridge/airthings_bridge.csv
+  sudo chown airthings_bridge: /var/airthings_bridge/airthings_bridge.csv
   ```
 
   It is converted to the new format at the first start. The original file is

@@ -1,7 +1,11 @@
 # Debugging
 
-Run the commands as member of the `bluetooth` group (see
-[Installation](installation.md#raspberry-pi)). `-v` logs debug information.
+The commands are shown with the following alias, which runs them as user
+airthings_bridge. `-v` logs debug information.
+
+```
+alias airthings-bridge='sudo -u airthings_bridge /opt/airthings_bridge/.venv/bin/airthings-bridge'
+```
 
 ## Device communication
 
@@ -40,7 +44,7 @@ range, or a wrong serial number.
 Send a test mail with the SMTP server of the configuration file:
 
 ```
-airthings-bridge test-mail --config airthings_bridge.yaml --to me@home.com -v
+airthings-bridge test-mail --config /opt/airthings_bridge/config.yaml --to me@home.com -v
 ```
 
 Publish a test message to `<topic>/test` with the MQTT broker of the
@@ -48,7 +52,7 @@ configuration file (the message is not retained, and the bridge status is
 not changed):
 
 ```
-airthings-bridge test-mqtt --config airthings_bridge.yaml -v
+airthings-bridge test-mqtt --config /opt/airthings_bridge/config.yaml -v
 ```
 
 A generic MQTT client (e.g. MQTT Explorer) shows the published messages.
@@ -93,7 +97,7 @@ log:
         level: DEBUG
         formatter: default
         class: logging.FileHandler
-        filename: /var/log/airthings_bridge/airthings_bridge.log
+        filename: /var/airthings_bridge/airthings_bridge.log
         encoding: utf8
         mode: a
     root:

@@ -30,14 +30,20 @@ The bridge runs with Python 3.11 or later, as systemd service.
 
 ## Quick start
 
+To try the bridge, as member of the `bluetooth` group:
+
 ```
-sudo python3 -m venv /opt/airthings_bridge
-sudo /opt/airthings_bridge/bin/pip install https://github.com/Drolla/Airthings-Bridge/archive/refs/heads/main.zip
-/opt/airthings_bridge/bin/airthings-bridge scan
-/opt/airthings_bridge/bin/airthings-bridge "2930123456, office" --port 8080 --csv office.csv
+git clone https://github.com/Drolla/Airthings-Bridge.git
+cd Airthings-Bridge
+python3 -m venv .venv
+.venv/bin/pip install -e .
+.venv/bin/airthings-bridge scan
+.venv/bin/airthings-bridge "2930123456, office" --port 8080 --csv office.csv
 ```
 
-Then open http://\<Raspberry Pi address\>:8080 in a browser.
+Then open http://\<Raspberry Pi address\>:8080 in a browser. The
+[Installation](docs/installation.md) explains the permanent installation as
+service.
 
 ## Documentation
 
