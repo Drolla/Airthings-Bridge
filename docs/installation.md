@@ -15,6 +15,7 @@ Bluetooth interface:
 sudo apt update
 sudo apt full-upgrade
 sudo apt install -y python3-venv git
+sudo rfkill unblock bluetooth
 sudo bluetoothctl power on
 ```
 
