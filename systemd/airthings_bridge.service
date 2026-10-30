@@ -8,18 +8,15 @@ Wants=network-online.target
 After=bluetooth.target network-online.target
 
 [Service]
-ExecStart=/opt/airthings_bridge/bin/airthings-bridge --config /opt/airthings_bridge/airthings_bridge.yaml
+ExecStart=/opt/airthings_bridge/.venv/bin/airthings-bridge --config /opt/airthings_bridge/config.yaml
 Restart=on-failure
 RestartSec=10
 
-# Run as dedicated user with access to Bluetooth LE, allowed to open the
-# HTTP port 80, and with writable /var/lib/airthings_bridge (CSV data) and
-# /var/log/airthings_bridge (log file) directories.
+# Run as dedicated user with access to Bluetooth LE, and allowed to open the
+# HTTP port 80. The user owns /var/airthings_bridge (CSV and log file).
 User=airthings_bridge
 SupplementaryGroups=bluetooth
 AmbientCapabilities=CAP_NET_BIND_SERVICE
-StateDirectory=airthings_bridge
-LogsDirectory=airthings_bridge
 
 [Install]
 WantedBy=multi-user.target

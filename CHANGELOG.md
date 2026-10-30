@@ -28,8 +28,9 @@ The Wave Plus Bridge becomes the Airthings Bridge.
 - BLE access by bleak instead of bluepy; the bridge runs without root.
 - systemd service instead of the init.d service, running as user
   airthings_bridge.
-- Renamed paths: /opt/airthings_bridge, /var/lib/airthings_bridge (CSV file),
-  /var/log/airthings_bridge (log file), airthings_bridge.yaml.
+- New paths: /opt/airthings_bridge (git clone, with the virtual environment
+  in `.venv` and the configuration in `config.yaml`) and /var/airthings_bridge
+  (CSV and log file).
 - Logger names: `airthings_bridge.*` instead of `__main__` and `libs.*`.
 - New CSV file format (logdb of the phc project), with a lower memory use.
   CSV files of version 1 are converted at the first start, and kept as

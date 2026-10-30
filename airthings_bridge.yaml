@@ -21,13 +21,13 @@ port: 80
 
 # Log file (optional, default: stdout), or a logging configuration, see
 # docs/debugging.md#logging
-log: /var/log/airthings_bridge/airthings_bridge.log
+log: /var/airthings_bridge/airthings_bridge.log
 
 
 ######## CSV file and graphs ########
 
 # CSV file of the logged data (optional)
-csv: /var/lib/airthings_bridge/airthings_bridge.csv
+csv: /var/airthings_bridge/airthings_bridge.csv
 
 # Time in seconds the logged data is kept
 data_retention: 2678400 # 31 days
