@@ -118,7 +118,7 @@ def main(argv: list[str] | None = None) -> None:
             config = load_config(file, options)
         except ConfigError as err:
             sys.exit(f"Error: {err}")
-        configure_logging(config.log, verbose=config.port is None)
+        configure_logging(config.log, verbose=config.port is None, discovery=True)
         try:
             with contextlib.suppress(KeyboardInterrupt):
                 run(Bridge(config).run())
