@@ -26,7 +26,7 @@ Enhance and Corentium Home 2, see [Devices](docs/devices.md).
 
 The bridge runs with Python 3.11 or later, as systemd service.
 
-![Concept picture](Concept.png)
+![Concept picture](docs/Concept.png)
 
 ## Quick start
 
