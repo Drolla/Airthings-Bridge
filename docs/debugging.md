@@ -77,7 +77,7 @@ after the modules, e.g.:
 | `airthings_bridge`                       | WARNING       |
 | `airthings_bridge.bridge`                | INFO (DEBUG without HTTP port) |
 | `airthings_bridge.consumers.alerts`      | INFO (print alerts) |
-| `airthings_bridge.airthings.common`      | Device discovery and connection |
+| `airthings_bridge.airthings.common`      | WARNING (INFO on the console, shows the device discovery) |
 | `airthings_bridge.consumers.mqtt`        | MQTT connection |
 | `airthings_bridge.mail`                  | Mail sending |
 | `airthings_bridge.web.server`            | HTTP requests (CSV generation time) |
