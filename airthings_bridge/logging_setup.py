@@ -20,7 +20,7 @@ def configure_logging(log: str | dict[str, Any] | None, verbose: bool = False) -
         return
     if log:
         handler = {"class": "logging.FileHandler", "filename": log,
-                   "encoding": "utf8", "mode": "w"}
+                   "encoding": "utf8", "mode": "a"}
     else:
         handler = {"class": "logging.StreamHandler", "stream": "ext://sys.stdout"}
     logging.config.dictConfig({
