@@ -26,13 +26,14 @@ Airthings app to update it.
 
 The bridge is a git clone in /opt/airthings_bridge, with its Python virtual
 environment in `.venv`. It runs under a dedicated user without root
-privileges, and writes its CSV file and log file into /var/airthings_bridge.
+privileges, and writes its CSV file into /var/lib/airthings_bridge and its
+log file into /var/log/airthings_bridge.
 
-Create the user, which has access to BLE, and the data directory:
+Create the user, which has access to BLE, and these directories:
 
 ```
 sudo useradd --system --home-dir /opt/airthings_bridge --shell /usr/sbin/nologin --groups bluetooth airthings_bridge
-sudo install -d -o airthings_bridge -g airthings_bridge /var/airthings_bridge
+sudo install -d -o airthings_bridge -g airthings_bridge /var/lib/airthings_bridge /var/log/airthings_bridge
 ```
 
 Fetch and install the bridge:
@@ -126,8 +127,8 @@ sudo systemctl start airthings_bridge
 * Move the CSV file to the new location:
 
   ```
-  sudo mv /var/log/waveplus_bridge.csv /var/airthings_bridge/airthings_bridge.csv
-  sudo chown airthings_bridge: /var/airthings_bridge/airthings_bridge.csv
+  sudo mv /var/log/waveplus_bridge.csv /var/lib/airthings_bridge/airthings_bridge.csv
+  sudo chown airthings_bridge: /var/lib/airthings_bridge/airthings_bridge.csv
   ```
 
   It is converted to the new format at the first start. The original file is
