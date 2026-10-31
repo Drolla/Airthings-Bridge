@@ -8,8 +8,9 @@ The Airthings Bridge is the successor of the
 [Wave Plus Bridge](https://github.com/Drolla/WavePlus_Bridge) (version 1.x),
 forked from it for version 2.0.
 
-> 🟡 **Draft:** this project has not been verified yet on real devices. This
-> will happen in November 2026.
+> 🟡 **Status:** tested with three Wave Plus devices running simultaneously.
+> The other [supported devices](docs/devices.md) have not been tested
+> physically.
 
 The Airthings Bridge connects one or multiple
 **Airthings** sensors to the **Wifi/LAN** network, using a **Raspberry Pi**
