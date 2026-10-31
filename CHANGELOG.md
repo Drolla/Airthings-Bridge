@@ -31,6 +31,7 @@ The Wave Plus Bridge becomes the Airthings Bridge.
 - New paths: /opt/airthings_bridge (git clone, with the virtual environment
   in `.venv` and the configuration in `config.yaml`) and /var/airthings_bridge
   (CSV and log file).
+- The log file is kept across restarts, instead of being overwritten.
 - Logger names: `airthings_bridge.*` instead of `__main__` and `libs.*`.
 - New CSV file format (logdb of the phc project), with a lower memory use.
   CSV files of version 1 are converted at the first start, and kept as

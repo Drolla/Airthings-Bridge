@@ -68,7 +68,8 @@ airthings-bridge 2930031376 2930089521
 
 ## Logging
 
-The bridge logs to the log file (`log`), or to stdout. The loggers are named
+The bridge logs to the log file (`log`), or to stdout. The log file is kept
+across restarts and is not rotated. The loggers are named
 after the modules, e.g.:
 
 | Logger                                   | Default level |
