@@ -29,8 +29,8 @@ The Wave Plus Bridge becomes the Airthings Bridge.
 - systemd service instead of the init.d service, running as user
   airthings_bridge.
 - New paths: /opt/airthings_bridge (git clone, with the virtual environment
-  in `.venv` and the configuration in `config.yaml`) and /var/airthings_bridge
-  (CSV and log file).
+  in `.venv` and the configuration in `config.yaml`),
+  /var/lib/airthings_bridge (CSV file) and /var/log/airthings_bridge (log file).
 - The log file is kept across restarts, instead of being overwritten.
 - The device discovery is shown when the bridge logs to the console.
 - Logger names: `airthings_bridge.*` instead of `__main__` and `libs.*`.

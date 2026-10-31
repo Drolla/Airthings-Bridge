@@ -98,7 +98,7 @@ log:
         level: DEBUG
         formatter: default
         class: logging.FileHandler
-        filename: /var/airthings_bridge/airthings_bridge.log
+        filename: /var/log/airthings_bridge/airthings_bridge.log
         encoding: utf8
         mode: a
     root:
