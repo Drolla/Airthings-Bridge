@@ -149,3 +149,26 @@ def test_sigterm_stops_the_bridge(tmp_path):
     finally:
         process.kill()
     assert "Airthings Bridge ended" in log.read_text()
+
+
+def test_consumer_libraries_loaded_on_use(tmp_path):
+    # In a new interpreter, as the other tests import the libraries
+    script = f"""
+import asyncio, sys
+from airthings_bridge import cli
+from airthings_bridge.bridge import Bridge
+from airthings_bridge.config import build_config
+
+async def run():
+    bridge = Bridge(build_config({{"sn": {DEVICES!r}, "emulation": True, "port": 0,
+                                   "csv": {str(tmp_path / "log.csv")!r}}}))
+    asyncio.get_running_loop().call_later(1, bridge.stop)
+    await bridge.run()
+
+asyncio.run(run())
+print(sorted({{"aiomqtt", "aiosmtplib"}} & set(sys.modules)))
+"""
+    result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True,
+                            timeout=30)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines()[-1] == "[]"

@@ -11,12 +11,14 @@ import logging
 import time
 import urllib.parse
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from aiohttp import web
 
-from airthings_bridge.consumers.sensorlog import SensorLog
 from airthings_bridge.readings import LiveState
+
+if TYPE_CHECKING:
+    from airthings_bridge.consumers.sensorlog import SensorLog
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +41,7 @@ class WebServer:
     """
 
     def __init__(self, port: int, live: LiveState, meta: dict[str, Any],
-                 sensor_log: SensorLog | None, decimations: list[tuple[float, int]],
+                 sensor_log: "SensorLog | None", decimations: list[tuple[float, int]],
                  developer: bool = False, eval_namespace: dict[str, Any] | None = None):
         self._port = port
         self._live = live
