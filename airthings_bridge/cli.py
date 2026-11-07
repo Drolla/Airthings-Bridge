@@ -93,11 +93,15 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def run(coro: Coroutine[Any, Any, Any]) -> Any:
-    """Run a coroutine in a new event loop and return its result."""
+def run(coro: Coroutine[Any, Any, Any], subprocesses: bool = False) -> Any:
+    """Run a coroutine in a new event loop and return its result.
+
+    subprocesses selects on Windows an event loop with subprocess support.
+    """
     # aiomqtt (paho-mqtt) requires add_reader(), which the default Windows
-    # event loop doesn't provide
-    loop_factory = asyncio.SelectorEventLoop if sys.platform == "win32" else None
+    # event loop doesn't provide. The selector event loop has no subprocesses.
+    selector = sys.platform == "win32" and not subprocesses
+    loop_factory = asyncio.SelectorEventLoop if selector else None
     with asyncio.Runner(loop_factory=loop_factory) as runner:
         return runner.run(coro)
 
@@ -116,7 +120,8 @@ def main(argv: list[str] | None = None) -> None:
         configure_logging(config.log, verbose=config.port is None, discovery=True)
         try:
             with contextlib.suppress(KeyboardInterrupt):
-                run(Bridge(config).run())
+                # Matter runs a process, which excludes MQTT on Windows
+                run(Bridge(config).run(), config.matter is not None and config.mqtt is None)
         except (BridgeError, OSError) as err:
             logger.critical("%s", err)
             logger.debug("Stack trace:", exc_info=True)

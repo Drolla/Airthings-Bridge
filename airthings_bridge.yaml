@@ -107,6 +107,30 @@ mqtt:
         my_living: '*'
 
 
+######## Matter bridge, see docs/matter.md ########
+
+# Requires Node.js and matter.js (npm ci in airthings_bridge/matter_js)
+# matter:
+#     # Directory of the Matter state (pairings, pairing code)
+#     storage: /var/lib/airthings_bridge/matter
+#
+#     # Exposed devices, '*' selects all devices
+#     devices: '*'
+#
+#     # Exposed radon value: radon_st, radon_week, radon_month, radon_lt or radon_year
+#     radon: radon_st
+#
+#     # Matter UDP port
+#     port: 5540
+#
+#     # Pairing data, generated at the first start if not defined
+#     passcode: <1 to 99999998>
+#     discriminator: <0 to 4095>
+#
+#     # Node.js executable
+#     node: node
+
+
 ######## Test support ########
 
 # Emulated devices

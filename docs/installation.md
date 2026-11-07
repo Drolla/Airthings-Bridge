@@ -110,6 +110,16 @@ sudo -u airthings_bridge -H bash -c '
 sudo systemctl start airthings_bridge
 ```
 
+With [Matter](matter.md), also update matter.js, and restart the service:
+
+```
+sudo -u airthings_bridge -H bash -c '
+  cd /opt/airthings_bridge/airthings_bridge/matter_js
+  npm ci
+'
+sudo systemctl restart airthings_bridge
+```
+
 ## Upgrade from version 1.x (Wave Plus Bridge)
 
 * Stop and remove the init.d service of version 1.x:

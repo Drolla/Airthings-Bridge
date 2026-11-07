@@ -125,6 +125,10 @@ class Bridge:
         if config.mqtt is not None:
             from airthings_bridge.consumers.mqtt import MqttPublisher
             self._consumers.append(MqttPublisher(config.mqtt))
+        if config.matter is not None:
+            from airthings_bridge.consumers.matter import MatterBridge
+            self._consumers.append(MatterBridge(
+                config.matter, [(d.serial, d.name, self.model(d)) for d in self.devices]))
 
         started = []
         try:

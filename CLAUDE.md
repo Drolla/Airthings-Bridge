@@ -19,6 +19,12 @@
 - Single asyncio event loop: all I/O uses async libraries (bleak, aiohttp,
   aiomqtt, aiosmtplib); no threads. Only the vendored logdb runs blocking on
   the loop. The service runs without root.
+- Consumers and the libraries they use are imported only when the consumer
+  is configured (imports inside `Bridge._start()` and the CLI commands).
+- The Matter bridge runs matter.js in a Node.js process
+  (`airthings_bridge/matter_js/bridge.mjs`), driven by
+  `airthings_bridge/consumers/matter.py` over JSON lines. Keep the domain
+  logic (clusters, units, air quality) in Python; the script stays generic.
 - The `/eval` HTTP endpoint is kept, but only active in developer mode.
 
 ## Branches

@@ -21,6 +21,8 @@ with Bluetooth Low Energy (BLE):
 * Logging of the sensor data in a CSV file
 * Mail alerts with flexible alert conditions
 * Publishing of the sensor data to an MQTT broker
+* Matter bridge, exposing the sensors to Apple Home, Google Home, Home
+  Assistant and other Matter controllers
 
 Supported devices: Wave Plus, Wave Radon, Wave Mini, Wave Gen 1, Wave
 Enhance and Corentium Home 2, see [Devices](docs/devices.md).
@@ -51,7 +53,8 @@ service.
 * [Installation](docs/installation.md): Raspberry Pi, installation, service,
   upgrade from version 1.x
 * [Configuration](docs/configuration.md): command line, YAML file, CSV file,
-  mail alerts, MQTT, HTTP requests
+  mail alerts, MQTT, Matter, HTTP requests
+* [Matter](docs/matter.md): exposed values, installation, pairing
 * [Devices](docs/devices.md): supported devices and their values
 * [Debugging](docs/debugging.md): device communication, mail, MQTT, logging
 * [Changelog](CHANGELOG.md)
@@ -61,4 +64,5 @@ service.
 MIT, see [LICENSE](LICENSE). The device access is based on
 [waveplus-reader](https://github.com/Airthings/waveplus-reader) and
 [airthings-ble](https://github.com/Airthings/airthings-ble) (MIT), the web UI
-uses [Dygraphs](https://dygraphs.com) (MIT).
+uses [Dygraphs](https://dygraphs.com) (MIT), the Matter bridge
+[matter.js](https://github.com/project-chip/matter.js) (Apache 2.0).
