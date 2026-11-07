@@ -19,7 +19,7 @@ unexpectedly.
 | Pressure              | Pressure Measurement                    | Wave Plus, Wave Mini, Wave Enhance |
 | Radon (`radon`)       | Radon Concentration Measurement (Bq/m³) | Wave Plus, Wave Radon, Wave Gen 1, Corentium Home 2 |
 | CO2                   | Carbon Dioxide Concentration Measurement (ppm) | Wave Plus, Wave Enhance  |
-| VOC                   | TVOC Concentration Measurement (ppb)    | Wave Plus, Wave Mini, Wave Enhance |
+| VOC                   | TVOC Concentration Measurement (ppm)    | Wave Plus, Wave Mini, Wave Enhance |
 | Battery               | Power Source                            | all except Wave Gen 1           |
 
 A Matter sensor has a single radon value: the 1 day average `radon_st` by
@@ -32,8 +32,9 @@ level of radon, CO2 and VOC, with the levels of the Airthings app:
 | CO2   | 800 ppm   | 1000 ppm  |
 | VOC   | 250 ppb   | 2000 ppb  |
 
-A device that couldn't be read is reported as unreachable. Noise and light
-aren't exposed.
+VOC is exposed in ppm (the devices measure ppb), as Google Home shows ppb
+values 1000 times too high. A device that couldn't be read is reported as
+unreachable. Noise and light aren't exposed.
 
 The controllers don't show all values: Home Assistant shows all of them,
 Apple Home and Google Home mainly the air quality, the temperature and the

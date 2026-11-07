@@ -64,7 +64,7 @@ def test_endpoint():
     assert state["radonConcentrationMeasurement"] == {"measurementUnit": 7,
                                                       "measurementMedium": 0}
     assert state["carbonDioxideConcentrationMeasurement"]["measurementUnit"] == 0
-    assert state["totalVolatileOrganicCompoundsConcentrationMeasurement"]["measurementUnit"] == 1
+    assert state["totalVolatileOrganicCompoundsConcentrationMeasurement"]["measurementUnit"] == 0
     assert state["powerSource"]["batReplaceability"] == 2
     assert state["powerSource"]["batPercentRemaining"] is None
     assert "powerSource" not in matter.endpoint("2900123456", "g", WaveGen1, "radon_st")["state"]
@@ -94,7 +94,7 @@ def test_cluster_state():
         "pressureMeasurement": {"measuredValue": 1012},
         "radonConcentrationMeasurement": {"measuredValue": 34.0},
         "carbonDioxideConcentrationMeasurement": {"measuredValue": 850.0},
-        "totalVolatileOrganicCompoundsConcentrationMeasurement": {"measuredValue": 50.0},
+        "totalVolatileOrganicCompoundsConcentrationMeasurement": {"measuredValue": 0.05},
         "powerSource": {"batPercentRemaining": 170, "batChargeLevel": 0,
                         "batReplacementNeeded": False},
     }

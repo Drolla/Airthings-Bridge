@@ -27,17 +27,19 @@ JS_DIR = Path(__file__).resolve().parent.parent / "matter_js"
 
 # Matter enumerations
 AIR_QUALITY_UNKNOWN, AIR_QUALITY_GOOD, AIR_QUALITY_FAIR, AIR_QUALITY_POOR = 0, 1, 2, 4
-UNIT_PPM, UNIT_PPB, UNIT_BQM3 = 0, 1, 7
+UNIT_PPM, UNIT_BQM3 = 0, 7
 MEDIUM_AIR = 0
 BATTERY_OK, BATTERY_WARNING, BATTERY_CRITICAL = 0, 1, 2
 POWER_SOURCE_ACTIVE = 1
 USER_REPLACEABLE = 2
 
-# Concentrations: Value key (radon: the configured radon key), cluster and unit
+# Concentrations: Value key (radon: the configured radon key), cluster, unit
+# and factor from the value unit. VOC is passed in ppm instead of ppb, as
+# Google Home shows ppb values 1000 times too high, labelled as ppm.
 CONCENTRATIONS = (
-    ("radon", "radonConcentrationMeasurement", UNIT_BQM3),
-    ("co2", "carbonDioxideConcentrationMeasurement", UNIT_PPM),
-    ("voc", "totalVolatileOrganicCompoundsConcentrationMeasurement", UNIT_PPB),
+    ("radon", "radonConcentrationMeasurement", UNIT_BQM3, 1),
+    ("co2", "carbonDioxideConcentrationMeasurement", UNIT_PPM, 1),
+    ("voc", "totalVolatileOrganicCompoundsConcentrationMeasurement", UNIT_PPM, 0.001),
 )
 
 # Air quality levels of the Airthings app: Values from which the air quality
@@ -56,7 +58,7 @@ def clusters(model: type[AirthingsDevice], radon_key: str) -> list[str]:
                                             ("humidity", "relativeHumidityMeasurement"),
                                             ("pressure", "pressureMeasurement"))
               if key in keys]
-    names += [cluster for key, cluster, _ in CONCENTRATIONS
+    names += [cluster for key, cluster, _, _ in CONCENTRATIONS
               if (radon_key if key == "radon" else key) in keys]
     if "battery" in keys:
         names.append("powerSource")
@@ -76,7 +78,7 @@ def endpoint(serial: str, name: str, model: type[AirthingsDevice],
             "reachable": False},
         "airQuality": {"airQuality": AIR_QUALITY_UNKNOWN},
     }
-    for _, cluster, unit in CONCENTRATIONS:
+    for _, cluster, unit, _ in CONCENTRATIONS:
         if cluster in names:
             state[cluster] = {"measurementUnit": unit, "measurementMedium": MEDIUM_AIR}
     if "powerSource" in names:
@@ -116,10 +118,10 @@ def cluster_state(values: dict[str, Any], radon_key: str) -> dict[str, Any]:
     if "pressure" in values:
         # Unit 0.1 kPa, which is 1 hPa
         state["pressureMeasurement"] = {"measuredValue": round(values["pressure"])}
-    for key, cluster, _ in CONCENTRATIONS:
+    for key, cluster, _, factor in CONCENTRATIONS:
         value = values.get(radon_key if key == "radon" else key)
         if value is not None:
-            state[cluster] = {"measuredValue": float(value)}
+            state[cluster] = {"measuredValue": value * factor}
     if "battery" in values:
         battery = values["battery"]
         level = BATTERY_CRITICAL if battery < 10 else BATTERY_WARNING if battery < 20 \
