@@ -36,7 +36,7 @@ def test_bridge_process(tmp_path, caplog):
 
     asyncio.run(run())
     messages = [r.getMessage() for r in caplog.records]
-    assert "Matter bridge ready, 0 paired controller(s)" in messages
+    assert "Matter bridge online, 0 paired controller(s)" in messages
     assert any("Manual pairing code" in m for m in messages)
     assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
     assert not any("Restart" in m for m in messages)

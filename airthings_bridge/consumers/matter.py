@@ -110,7 +110,9 @@ def cluster_state(values: dict[str, Any], radon_key: str) -> dict[str, Any]:
     state: dict[str, Any] = {"bridgedDeviceBasicInformation": {"reachable": bool(values)}}
     if not values:
         return state
-    state["airQuality"] = {"airQuality": air_quality(values, radon_key)}
+    level = air_quality(values, radon_key)
+    if level != AIR_QUALITY_UNKNOWN:
+        state["airQuality"] = {"airQuality": level}
     if "temperature" in values:
         state["temperatureMeasurement"] = {"measuredValue": round(values["temperature"] * 100)}
     if "humidity" in values:
@@ -143,8 +145,9 @@ class MatterBridge:
 
     The process (matter_js/bridge.mjs) gets the endpoints at its start and the
     cluster states of each cycle, as JSON lines on stdin. It reports its state
-    as JSON lines on stdout, and logs to stderr. It is restarted if it ends
-    unexpectedly.
+    as JSON lines on stdout, and logs to stderr. It goes online with the first
+    cluster states, so that the controllers don't get placeholder values. It
+    is restarted if it ends unexpectedly, with the last cluster states.
     """
 
     START_TIMEOUT = 60  # matter.js starts slowly on a Raspberry Pi Zero
@@ -159,6 +162,7 @@ class MatterBridge:
         self._endpoints = [endpoint(serial, name, model, config.radon)
                            for serial, name, model in exposed]
         self._ids = {name: f"airthings-{serial}" for serial, name, _ in exposed}
+        self._states: dict[str, dict[str, dict[str, Any]]] = {}  # Last states by endpoint
         self._process: asyncio.subprocess.Process | None = None
         self._ready = asyncio.Event()
         self._started = False
@@ -187,9 +191,10 @@ class MatterBridge:
     def _handle_message(self, message: dict[str, Any]) -> None:
         kind = message.get("type")
         if kind == "ready":
-            logger.info("Matter bridge ready, %s paired controller(s)", message.get("fabrics"))
             self._started = True
             self._ready.set()
+        elif kind == "online":
+            logger.info("Matter bridge online, %s paired controller(s)", message.get("fabrics"))
         elif kind == "pairing":
             qr_code = message.get("qr", "")
             logger.warning(
@@ -239,6 +244,8 @@ class MatterBridge:
         self._process = process
         try:
             await self._send(process, self._init_message())
+            if self._states:
+                await self._send(process, {"type": "update", "states": self._states})
             await asyncio.gather(self._read_stdout(process.stdout),
                                  self._read_stderr(process.stderr))
             return await process.wait()
@@ -291,6 +298,10 @@ class MatterBridge:
             return
         states = {self._ids[reading.device]: cluster_state(reading.values, self._config.radon)
                   for reading in cycle.readings if reading.device in self._ids}
+        for endpoint_id, state in states.items():
+            last = self._states.setdefault(endpoint_id, {})
+            for cluster, attributes in state.items():
+                last.setdefault(cluster, {}).update(attributes)
         await self._send(process, {"type": "update", "states": states})
 
     async def stop(self) -> None:

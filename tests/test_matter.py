@@ -6,6 +6,7 @@ import json
 import logging
 import sys
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -111,7 +112,6 @@ def test_cluster_state_missing_values():
         "bridgedDeviceBasicInformation": {"reachable": False}}
     assert matter.cluster_state({"temperature": -1.234}, "radon_st") == {
         "bridgedDeviceBasicInformation": {"reachable": True},
-        "airQuality": {"airQuality": 0},
         "temperatureMeasurement": {"measuredValue": -123}}
 
 
@@ -124,8 +124,8 @@ def test_cluster_state_battery(battery, level, replace):
 
 
 # Emulated bridge.mjs. It logs the received messages to FAKE_LOG, and behaves
-# according to FAKE_MODE: fail (end at the start), noready, crash (at an
-# update) or hang (ignore stop).
+# according to FAKE_MODE: fail (end at the start), noready, crash (at the first
+# update of the test) or hang (ignore stop).
 FAKE_NODE = """
 import json, os, sys
 mode = os.environ.get("FAKE_MODE", "")
@@ -141,11 +141,15 @@ for line in sys.stdin:
         print("Console output", flush=True)
         print("2026-11-07 10:00:00.000 NOTICE   ServerNode  Started", file=sys.stderr, flush=True)
         if mode != "noready":
-            print(json.dumps({"type": "ready", "fabrics": 0}), flush=True)
-            print(json.dumps({"type": "pairing", "manual": "1234-567-8901", "qr": "MT:Y.K9"}),
-                  flush=True)
-    elif message["type"] == "update" and mode == "crash":
-        sys.exit(1)
+            print(json.dumps({"type": "ready"}), flush=True)
+    elif message["type"] == "update":
+        crashed = os.environ["FAKE_LOG"] + ".crashed"
+        if mode == "crash" and not os.path.exists(crashed):
+            open(crashed, "w").close()
+            sys.exit(1)
+        print(json.dumps({"type": "online", "fabrics": 0}), flush=True)
+        print(json.dumps({"type": "pairing", "manual": "1234-567-8901", "qr": "MT:Y.K9"}),
+              flush=True)
     elif message["type"] == "stop" and mode != "hang":
         sys.exit(0)
 """
@@ -189,6 +193,7 @@ def test_lifecycle(fake_node, caplog):
     assert update["states"]["airthings-2920123456"] == {
         "bridgedDeviceBasicInformation": {"reachable": False}}
     assert stop == {"type": "stop"}
+    assert "Matter bridge online, 0 paired controller(s)" in caplog.text
     assert "Manual pairing code: 1234-567-8901" in caplog.text
     assert "qrcode.html?data=MT%3AY.K9" in caplog.text
     assert "ServerNode  Started" in caplog.text and "Console output" in caplog.text
@@ -246,13 +251,36 @@ def test_restart_after_crash(fake_node, monkeypatch, caplog):
         await bridge.handle(CYCLE)
         for _ in range(200):
             await asyncio.sleep(0.02)
-            if len(fake_node()) == 3 and bridge._ready.is_set():
+            if len(fake_node()) == 4 and bridge._ready.is_set():
                 break
         await bridge.stop()
 
     asyncio.run(run())
-    assert [m["type"] for m in fake_node()] == ["init", "update", "init", "stop"]
+    messages = fake_node()
+    assert [m["type"] for m in messages] == ["init", "update", "init", "update", "stop"]
+    # The restarted process gets the last states
+    assert messages[3]["states"] == messages[1]["states"]
     assert "ended with exit code 1. Restart" in caplog.text
+
+
+def test_last_states():
+    async def run():
+        bridge = matter.MatterBridge(CONFIG, DEVICES)
+        bridge._process = mock.Mock()
+        bridge._ready.set()
+        with mock.patch.object(bridge, "_send", mock.AsyncMock()):
+            await bridge.handle(CYCLE)
+            await bridge.handle(Cycle(2000, (Reading("office", {"temperature": 20.0}, 1990),
+                                             Reading("cellar", {}))))
+        return bridge._states
+
+    states = asyncio.run(run())
+    office = states["airthings-2930123456"]
+    assert office["temperatureMeasurement"] == {"measuredValue": 2000}
+    assert office["carbonDioxideConcentrationMeasurement"] == {"measuredValue": 850.0}
+    assert office["airQuality"] == {"airQuality": 2}
+    assert states["airthings-2920123456"] == {
+        "bridgedDeviceBasicInformation": {"reachable": False}}
 
 
 def test_kill_at_stop(fake_node, monkeypatch, caplog):

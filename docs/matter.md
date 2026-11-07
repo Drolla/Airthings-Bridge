@@ -7,7 +7,8 @@ It appears as a Matter bridge with an air quality sensor per device.
 The Matter side runs in a separate Node.js process based on
 [matter.js](https://github.com/project-chip/matter.js). The bridge starts it,
 passes it the values of each reading, and restarts it if it ends
-unexpectedly.
+unexpectedly. The bridge goes online in Matter after the first reading of the
+devices, so that the controllers get real values from the start.
 
 ## Exposed values
 

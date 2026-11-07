@@ -7,7 +7,9 @@
 //
 // Reads JSON lines on stdin: "init" (storage, port, pairing data, endpoints),
 // "update" (cluster states by endpoint ID) and "stop". Writes JSON lines on
-// stdout: "ready", "pairing" and "fabrics". Logs to stderr.
+// stdout: "ready" (endpoints created), "online", "pairing" and "fabrics". Logs
+// to stderr. The node goes online with the first update, so that the
+// controllers don't get the placeholder values of the endpoints.
 
 import { randomBytes, randomInt } from "node:crypto";
 import { createInterface } from "node:readline";
@@ -126,14 +128,20 @@ async function init({ storage, port, version, versionNumber, passcode, discrimin
     server.events.commissioning.fabricsChanged.on(() =>
         send({ type: "fabrics", fabrics: fabricCount() }));
     server.lifecycle.decommissioned.on(sendPairing);
-    await server.start();
-    send({ type: "ready", fabrics: fabricCount() });
-    if (!server.lifecycle.isCommissioned) sendPairing();
+    send({ type: "ready" });
 }
 
 async function update({ states }) {
     for (const [id, state] of Object.entries(states)) {
         await endpoints.get(id)?.set(state);
+    }
+    if (!server.lifecycle.isOnline) {
+        await server.start().catch(error => {
+            logger.error(error);
+            process.exit(1);
+        });
+        send({ type: "online", fabrics: fabricCount() });
+        if (!server.lifecycle.isCommissioned) sendPairing();
     }
 }
 
