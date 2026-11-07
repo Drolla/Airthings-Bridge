@@ -5,8 +5,9 @@ from unittest import mock
 import aiomqtt
 import pytest
 
-from airthings_bridge import cli
+from airthings_bridge import cli, mail
 from airthings_bridge.airthings import ScanResult
+from airthings_bridge.consumers import mqtt
 from airthings_bridge.errors import DeviceError
 
 CONFIG = """
@@ -79,14 +80,14 @@ def test_read_invalid_serial():
 
 
 def test_test_mail(config_file, capsys):
-    with mock.patch.object(cli.Mailer, "send", mock.AsyncMock()) as send:
+    with mock.patch.object(mail.Mailer, "send", mock.AsyncMock()) as send:
         cli.main(["test-mail", "--config", config_file, "--to", "a@home"])
     assert send.call_args.args[0:2] == ("bridge@home", ["a@home"])
     assert "Mail sent to a@home" in capsys.readouterr().out
 
 
 def test_test_mail_failure(config_file):
-    with mock.patch.object(cli.Mailer, "send", mock.AsyncMock(side_effect=OSError("down"))), \
+    with mock.patch.object(mail.Mailer, "send", mock.AsyncMock(side_effect=OSError("down"))), \
             pytest.raises(SystemExit):
         cli.main(["test-mail", "--config", config_file, "--to", "a@home"])
 
@@ -94,7 +95,7 @@ def test_test_mail_failure(config_file):
 def test_test_mqtt(config_file, capsys):
     client = mock.AsyncMock()
     client.__aenter__.return_value = client
-    with mock.patch.object(cli, "create_client", return_value=client):
+    with mock.patch.object(mqtt, "create_client", return_value=client):
         cli.main(["test-mqtt", "--config", config_file])
     assert client.publish.call_args.args[0] == "home/test"
     assert "published to home/test" in capsys.readouterr().out
@@ -103,7 +104,7 @@ def test_test_mqtt(config_file, capsys):
 def test_test_mqtt_failure(config_file, capsys):
     client = mock.AsyncMock()
     client.__aenter__.side_effect = aiomqtt.MqttError("refused")
-    with mock.patch.object(cli, "create_client", return_value=client), \
+    with mock.patch.object(mqtt, "create_client", return_value=client), \
             pytest.raises(SystemExit):
         cli.main(["test-mqtt", "--config", config_file])
     assert "refused" in capsys.readouterr().err

@@ -44,6 +44,8 @@ The Wave Plus Bridge becomes the Airthings Bridge.
 - Dygraph 2.2.1 is served by the bridge instead of a CDN.
 - Single asyncio event loop instead of threads (aiohttp, aiomqtt,
   aiosmtplib).
+- The libraries of the MQTT publishing and the mail alerts are only loaded
+  if these features are configured.
 - The `/eval` HTTP request is only available in developer mode.
 - The `/` HTTP request redirects to the web UI.
 

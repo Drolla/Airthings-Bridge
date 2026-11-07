@@ -14,17 +14,12 @@ import time
 from collections.abc import Coroutine
 from typing import Any
 
-import aiomqtt
-import aiosmtplib
-
 from airthings_bridge import __version__
 from airthings_bridge.airthings import AirthingsDevice, create_device, model_for_serial, scan
 from airthings_bridge.bridge import Bridge
 from airthings_bridge.config import Config, load_config
-from airthings_bridge.consumers.mqtt import create_client
 from airthings_bridge.errors import BridgeError, ConfigError, DeviceError
 from airthings_bridge.logging_setup import configure_logging
-from airthings_bridge.mail import Mailer
 
 logger = logging.getLogger(__name__)
 
@@ -183,6 +178,10 @@ async def _read(serials: list[str], period: float | None, retries: int) -> bool:
 
 
 async def _test_mail(config: Config, to: list[str], from_: str | None) -> bool:
+    import aiosmtplib
+
+    from airthings_bridge.mail import Mailer
+
     if config.smtp is None:
         raise ConfigError("No SMTP server configured ('smtp_server')")
     from_ = from_ or config.smtp.user
@@ -199,6 +198,10 @@ async def _test_mail(config: Config, to: list[str], from_: str | None) -> bool:
 
 
 async def _test_mqtt(config: Config) -> bool:
+    import aiomqtt
+
+    from airthings_bridge.consumers.mqtt import create_client
+
     if config.mqtt is None:
         raise ConfigError("No MQTT broker configured ('mqtt')")
     topic = "/".join(filter(bool, [config.mqtt.topic, "test"]))

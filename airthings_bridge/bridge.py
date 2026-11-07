@@ -11,19 +11,19 @@ import dataclasses
 import logging
 import signal
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from airthings_bridge.airthings import AirthingsDevice, create_device
 from airthings_bridge.config import Config
 from airthings_bridge.consumers import Consumer
-from airthings_bridge.consumers.alerts import Alerts
-from airthings_bridge.consumers.mqtt import MqttPublisher
-from airthings_bridge.consumers.sensorlog import SensorLog
 from airthings_bridge.emulation import EmulatedDevice
 from airthings_bridge.errors import DeviceError
 from airthings_bridge.measurements import MEASUREMENTS
 from airthings_bridge.readings import Cycle, LiveState, Reading
 from airthings_bridge.web.server import WebServer
+
+if TYPE_CHECKING:
+    from airthings_bridge.consumers.sensorlog import SensorLog
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +108,9 @@ class Bridge:
         if config.emulation:
             logger.warning("Emulated devices")
 
+        # The consumers are imported on use, to load their libraries only if needed
         if config.csv is not None:
+            from airthings_bridge.consumers.sensorlog import SensorLog
             logger.info("Open the CSV data log file '%s'", config.csv)
             start = time.perf_counter()
             self.sensor_log = SensorLog(
@@ -118,8 +120,10 @@ class Bridge:
                         time.perf_counter() - start)
             self._consumers.append(self.sensor_log)
         if config.alerts:
+            from airthings_bridge.consumers.alerts import Alerts
             self._consumers.append(Alerts(config.alerts, config.smtp))
         if config.mqtt is not None:
+            from airthings_bridge.consumers.mqtt import MqttPublisher
             self._consumers.append(MqttPublisher(config.mqtt))
 
         started = []
