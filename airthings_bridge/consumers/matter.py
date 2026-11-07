@@ -181,7 +181,7 @@ class MatterBridge:
         return {"type": "init", "storage": str(config.storage), "port": config.port,
                 "version": __version__, "versionNumber": major * 10000 + minor * 100 + patch,
                 "passcode": config.passcode, "discriminator": config.discriminator,
-                "logLevel": "info" if logger.isEnabledFor(logging.DEBUG) else "notice",
+                "logLevel": "debug" if logger.isEnabledFor(logging.DEBUG) else "notice",
                 "endpoints": self._endpoints}
 
     def _handle_message(self, message: dict[str, Any]) -> None:

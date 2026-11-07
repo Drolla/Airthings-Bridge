@@ -79,7 +79,7 @@ after the modules, e.g.:
 | `airthings_bridge.consumers.alerts`      | INFO (print alerts) |
 | `airthings_bridge.airthings.common`      | WARNING (INFO on the console, shows the device discovery) |
 | `airthings_bridge.consumers.mqtt`        | MQTT connection |
-| `airthings_bridge.consumers.matter`      | Matter process (INFO), matter.js details (DEBUG) |
+| `airthings_bridge.consumers.matter`      | Matter process (INFO), matter.js details (DEBUG, verbose) |
 | `airthings_bridge.mail`                  | Mail sending |
 | `airthings_bridge.web.server`            | HTTP requests (CSV generation time) |
 
