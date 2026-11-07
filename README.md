@@ -1,4 +1,4 @@
-# Airthings Bridge to Wifi/LAN and MQTT
+# Airthings Bridge to Wifi/LAN, MQTT and Matter
 
 [![Airthings](https://img.shields.io/badge/devices-Airthings-0072CE)](docs/devices.md)
 [![Python](https://img.shields.io/badge/python-%3E%3D3.11-blue)](https://www.python.org/)
@@ -10,7 +10,8 @@ forked from it for version 2.0.
 
 > 🟡 **Status:** tested with three Wave Plus devices running simultaneously.
 > The other [supported devices](docs/devices.md) have not been tested
-> physically.
+> physically. The Matter bridge has been tested with Google Home and emulated
+> devices.
 
 The Airthings Bridge connects one or multiple
 **Airthings** sensors to the **Wifi/LAN** network, using a **Raspberry Pi**
@@ -21,8 +22,8 @@ with Bluetooth Low Energy (BLE):
 * Logging of the sensor data in a CSV file
 * Mail alerts with flexible alert conditions
 * Publishing of the sensor data to an MQTT broker
-* Matter bridge, exposing the sensors to Apple Home, Google Home, Home
-  Assistant and other Matter controllers
+* Matter bridge, exposing the sensors as air quality sensors to Matter
+  controllers like Google Home, Apple Home or Home Assistant
 
 Supported devices: Wave Plus, Wave Radon, Wave Mini, Wave Gen 1, Wave
 Enhance and Corentium Home 2, see [Devices](docs/devices.md).

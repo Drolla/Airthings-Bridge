@@ -33,8 +33,8 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(
         prog="airthings-bridge",
-        description="Bridge from Airthings BLE sensors to HTTP, CSV logging, mail alerts and "
-                    "MQTT. Without command, the bridge is run.")
+        description="Bridge from Airthings BLE sensors to HTTP, CSV logging, mail alerts, "
+                    "MQTT and Matter. Without command, the bridge is run.")
     parser.add_argument("--version", action="version", version=__version__)
     commands = parser.add_subparsers(dest="command", metavar="command")
 
