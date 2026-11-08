@@ -11,7 +11,6 @@ import hashlib
 import json
 import logging
 import re
-import urllib.parse
 from pathlib import Path
 from typing import Any
 
@@ -177,6 +176,8 @@ class MatterBridge:
         self._states: dict[str, dict[str, dict[str, Any]]] = {}  # Last states by endpoint
         self._process: asyncio.subprocess.Process | None = None
         self._ready = asyncio.Event()
+        self._controllers = 0
+        self._pairing: dict[str, str] | None = None  # Pairing codes while not paired
         self._started = False
         self._stopping = False
         self._supervisor: asyncio.Task[None] | None = None
@@ -205,17 +206,24 @@ class MatterBridge:
         if kind == "ready":
             self._started = True
             self._ready.set()
-        elif kind == "online":
-            logger.info("Matter bridge online, %s paired controller(s)", message.get("fabrics"))
+        elif kind in ("online", "fabrics"):
+            self._controllers = int(message.get("fabrics") or 0)
+            if self._controllers:
+                self._pairing = None
+            logger.info("Matter bridge %s, %s paired controller(s)",
+                        "online" if kind == "online" else "pairings changed", self._controllers)
         elif kind == "pairing":
-            qr_code = message.get("qr", "")
-            logger.warning(
-                "Matter bridge not paired. Manual pairing code: %s, QR code: %s",
-                message.get("manual"),
-                "https://project-chip.github.io/connectedhomeip/qrcode.html?data="
-                + urllib.parse.quote(qr_code))
-        elif kind == "fabrics":
-            logger.info("Matter bridge: %s paired controller(s)", message.get("fabrics"))
+            self._pairing = {"manual": str(message.get("manual")), "qr": str(message.get("qr"))}
+            logger.warning("Matter bridge not paired. Manual pairing code: %s, QR code content: %s",
+                           self._pairing["manual"], self._pairing["qr"])
+
+    def status(self) -> dict[str, Any]:
+        """Return the pairing state (/matter format), with the codes while not paired."""
+        status: dict[str, Any] = {"paired": self._controllers > 0,
+                                  "controllers": self._controllers}
+        if self._pairing is not None:
+            status.update(self._pairing)
+        return status
 
     async def _read_stdout(self, stream: asyncio.StreamReader) -> None:
         async for line in stream:

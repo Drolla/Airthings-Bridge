@@ -190,6 +190,7 @@ matter:
 | `/data`              | Current values of all devices (JSON)                               |
 | `/csv`               | Logged data (CSV), selected by glob patterns separated by `;` (`/csv?*:temp*;*:hum*`) or by a regular expression (`/csv?re=office:.*`) |
 | `/meta`              | Measurements and devices (JSON), used by the web UI                |
+| `/matter`            | Matter pairing state (JSON), if Matter is configured: `paired`, `controllers`, and the codes `manual` and `qr` while not paired |
 | `/eval?<expression>` | Developer mode only: result of a Python expression                 |
 
 `/data` response (times in seconds since epoch):

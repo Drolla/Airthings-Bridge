@@ -4,7 +4,8 @@
 * airthings_bridge.js - Web UI
 *
 * The table of the current values and the graphs are built from the
-* measurement and device metadata (/meta).
+* measurement and device metadata (/meta). The Matter status and the Matter
+* pairing page (matter.html) use the Matter pairing state (/matter).
 *
 * Copyright (C) 2020-2026 Andreas Drollinger
 *************************************************************************/
@@ -136,7 +137,47 @@ function LoadGraphs(Meta,DivId) {
 	LoadGraphsNextGraph();
 }
 
-function LoadPage(TableDivId,GraphsDivId) {
+// Matter status line. There is no response without Matter configuration.
+function LoadMatterStatus(DivId) {
+	AjaxJsonGet("/matter",function(State) {
+		document.getElementById(DivId).innerHTML = "Matter: " + (State.paired ?
+			"paired with "+State.controllers+" controller(s)" :
+			'not paired, <a href="matter.html">pair the bridge</a>');
+	});
+}
+
+// Matter pairing page: QR code and manual pairing code while not paired
+function LoadMatterPairing(DivId) {
+	var shownQr = null;
+	function Update() {
+		AjaxJsonGet("/matter",function(State) {
+			var div = document.getElementById(DivId);
+			if (State.paired) {
+				shownQr = null;
+				div.innerHTML = "<p>The bridge is paired with "+State.controllers+
+					" Matter controller(s). Further controllers are added with a pairing code " +
+					"of a paired controller.</p>";
+				return;
+			}
+			if (!State.qr || State.qr==shownQr) return;
+			shownQr = State.qr;
+			var qr = qrcode(0,"M");
+			qr.addData(State.qr);
+			qr.make();
+			div.innerHTML =
+				"<p>Add the bridge to a Matter controller (e.g. Google Home, Apple Home) " +
+				"with the QR code or the manual pairing code.</p>" +
+				qr.createSvgTag(DisplayType=="Mobile" ? 10 : 6, 24) +
+				"<p>Manual pairing code: <b>"+EscapeHtml(State.manual)+"</b></p>";
+		});
+	}
+	Update();
+	setInterval(Update,5000);
+}
+
+function LoadPage(TableDivId,GraphsDivId,MatterDivId) {
+	LoadMatterStatus(MatterDivId);
+	setInterval(function () { LoadMatterStatus(MatterDivId); },10000);
 	AjaxJsonGet("/meta",function(Meta) {
 		LoadTable(Meta,TableDivId);
 		setInterval(function () { LoadTable(Meta,TableDivId); },60000);

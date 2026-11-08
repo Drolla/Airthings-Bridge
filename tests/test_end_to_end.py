@@ -78,6 +78,7 @@ def test_http_requests(tmp_path):
         assert body.splitlines()[0] == ("Time,cellar:radon_st,cellar:radon_week,"
                                         "cellar:radon_month,cellar:radon_lt")
         assert (await get("/csv?re=("))[0] == 400
+        assert (await get("/matter"))[0] == 404  # Matter not configured
 
         assert (await get("/ui/dygraph.min.js"))[0] == 200
         assert (await get("/ui/../server.py"))[0] == 404

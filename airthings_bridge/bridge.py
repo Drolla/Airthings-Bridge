@@ -23,6 +23,7 @@ from airthings_bridge.readings import Cycle, LiveState, Reading
 from airthings_bridge.web.server import WebServer
 
 if TYPE_CHECKING:
+    from airthings_bridge.consumers.matter import MatterBridge
     from airthings_bridge.consumers.sensorlog import SensorLog
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,7 @@ class Bridge:
         self.config = config
         self.live = LiveState()
         self.sensor_log: SensorLog | None = None
+        self.matter: MatterBridge | None = None
         self.web_server: WebServer | None = None
         self._consumers: list[Consumer] = []
         self._stopping = asyncio.Event()
@@ -127,8 +129,9 @@ class Bridge:
             self._consumers.append(MqttPublisher(config.mqtt))
         if config.matter is not None:
             from airthings_bridge.consumers.matter import MatterBridge
-            self._consumers.append(MatterBridge(
-                config.matter, [(d.serial, d.name, self.model(d)) for d in self.devices]))
+            self.matter = MatterBridge(
+                config.matter, [(d.serial, d.name, self.model(d)) for d in self.devices])
+            self._consumers.append(self.matter)
 
         started = []
         try:
@@ -144,7 +147,8 @@ class Bridge:
                                "evaluates any provided Python expression!")
             self.web_server = WebServer(
                 config.port, self.live, self.meta(), self.sensor_log,
-                list(config.graph_decimations), config.developer, {"bridge": self})
+                list(config.graph_decimations), config.developer, {"bridge": self},
+                self.matter.status if self.matter is not None else None)
             await self.web_server.start()
             logger.info("HTTP/Web server listening on port %s", self.web_server.port)
 

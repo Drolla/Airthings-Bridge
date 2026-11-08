@@ -65,5 +65,7 @@ service.
 MIT, see [LICENSE](LICENSE). The device access is based on
 [waveplus-reader](https://github.com/Airthings/waveplus-reader) and
 [airthings-ble](https://github.com/Airthings/airthings-ble) (MIT), the web UI
-uses [Dygraphs](https://dygraphs.com) (MIT), the Matter bridge
-[matter.js](https://github.com/project-chip/matter.js) (Apache 2.0).
+uses [Dygraphs](https://dygraphs.com) (MIT) and
+[qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) (MIT),
+the Matter bridge [matter.js](https://github.com/project-chip/matter.js)
+(Apache 2.0).

@@ -10,6 +10,7 @@ import html
 import logging
 import time
 import urllib.parse
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -32,6 +33,7 @@ class WebServer:
        * /: Redirect to /ui/index.html
        * /data: Current sensor data in JSON format
        * /meta: Measurements and devices in JSON format, for the web UI
+       * /matter: Matter pairing state in JSON format, if Matter is configured
        * /csv: Sensor data history in CSV format, selected by glob patterns
          separated by ';' (/csv?*:temp*;*:hum*) or by a regular expression
          (/csv?re=...)
@@ -42,13 +44,15 @@ class WebServer:
 
     def __init__(self, port: int, live: LiveState, meta: dict[str, Any],
                  sensor_log: "SensorLog | None", decimations: list[tuple[float, int]],
-                 developer: bool = False, eval_namespace: dict[str, Any] | None = None):
+                 developer: bool = False, eval_namespace: dict[str, Any] | None = None,
+                 matter: Callable[[], dict[str, Any]] | None = None):
         self._port = port
         self._live = live
         self._meta = meta
         self._sensor_log = sensor_log
         self._decimations = decimations
         self._eval_namespace = eval_namespace or {}
+        self._matter = matter
         self._runner: web.AppRunner | None = None
 
         app = web.Application()
@@ -57,6 +61,8 @@ class WebServer:
         app.router.add_get("/meta", self._meta_data)
         if sensor_log is not None:
             app.router.add_get("/csv", self._csv)
+        if matter is not None:
+            app.router.add_get("/matter", self._matter_state)
         app.router.add_static("/ui/", UI_DIR)
         if developer:
             app.router.add_get("/eval", self._eval)
@@ -90,7 +96,9 @@ class WebServer:
 
     @staticmethod
     async def _allow_cors(request: web.Request, response: web.StreamResponse) -> None:
-        response.headers["Access-Control-Allow-Origin"] = "*"
+        # Not for the pairing codes, which other websites shouldn't read
+        if request.path != "/matter":
+            response.headers["Access-Control-Allow-Origin"] = "*"
 
     async def _root(self, request: web.Request) -> web.Response:
         raise web.HTTPFound("/ui/index.html")
@@ -100,6 +108,10 @@ class WebServer:
 
     async def _meta_data(self, request: web.Request) -> web.Response:
         return web.json_response(self._meta)
+
+    async def _matter_state(self, request: web.Request) -> web.Response:
+        assert self._matter is not None
+        return web.json_response(self._matter())
 
     async def _csv(self, request: web.Request) -> web.Response:
         assert self._sensor_log is not None

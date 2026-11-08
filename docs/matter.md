@@ -135,20 +135,26 @@ different access points.
 
 ## Pairing
 
-At its start, the bridge logs the pairing code while no controller is
-paired, e.g. in the journal of the service:
+The web UI shows the Matter status below the current data. While no
+controller is paired, its link opens the pairing page with the QR code and
+the manual pairing code. The bridge also logs them at its start, e.g. in the
+journal of the service:
 
 ```
 journalctl -u airthings_bridge | grep "pairing code"
 ```
 
 ```
-Matter bridge not paired. Manual pairing code: 34970112332, QR code: https://project-chip.github.io/connectedhomeip/qrcode.html?data=MT%3AY.K90...
+Matter bridge not paired. Manual pairing code: 34970112332, QR code content: MT:Y.K90...
 ```
 
-Enter the manual pairing code in the controller, or open the link to show
-the QR code. The pairing code is generated at the first start and stays the
-same; `passcode` and `discriminator` set it explicitly.
+Scan the QR code or enter the manual pairing code in the controller. The
+pairing code is generated at the first start and stays the same; `passcode`
+and `discriminator` set it explicitly.
+
+Like the code on the label of a Matter device, the pairing code allows
+anybody in the local network to pair the bridge as long as it isn't paired.
+It isn't shown anymore after the first pairing.
 
 The bridge is not certified, and uses the Matter test vendor ID (0xFFF1,
 product ID 0x8000):

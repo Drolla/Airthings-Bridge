@@ -22,7 +22,8 @@ The Wave Plus Bridge becomes the Airthings Bridge.
 - Graceful stop: pending mails are sent, the MQTT status is set to Offline.
 - Documentation in [docs/](docs), tests, and continuous integration.
 - Matter bridge, exposing the devices as Matter air quality sensors (with
-  matter.js), see [Matter](docs/matter.md).
+  matter.js), see [Matter](docs/matter.md). The web UI shows the Matter
+  status and, while the bridge isn't paired, a pairing page.
 
 ### Changed
 

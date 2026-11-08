@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from unittest import mock
 
+import aiohttp
 import pytest
 
 from airthings_bridge.airthings import CorentiumHome2, WaveEnhance, WaveGen1, WaveMini, WavePlus
@@ -216,7 +217,7 @@ def test_lifecycle(fake_node, caplog):
     assert stop == {"type": "stop"}
     assert "Matter bridge online, 0 paired controller(s)" in caplog.text
     assert "Manual pairing code: 1234-567-8901" in caplog.text
-    assert "qrcode.html?data=MT%3AY.K9" in caplog.text
+    assert "QR code content: MT:Y.K9" in caplog.text
     assert "ServerNode  Started" in caplog.text and "Console output" in caplog.text
 
 
@@ -316,6 +317,20 @@ def test_kill_at_stop(fake_node, monkeypatch, caplog):
     assert "didn't stop, killed" in caplog.text
 
 
+def test_status():
+    bridge = matter.MatterBridge(CONFIG, DEVICES)
+    assert bridge.status() == {"paired": False, "controllers": 0}
+    bridge._handle_message({"type": "online", "fabrics": 0})
+    bridge._handle_message({"type": "pairing", "manual": "123", "qr": "MT:A"})
+    assert bridge.status() == {"paired": False, "controllers": 0, "manual": "123", "qr": "MT:A"}
+    bridge._handle_message({"type": "fabrics", "fabrics": 1})
+    assert bridge.status() == {"paired": True, "controllers": 1}
+    # All controllers removed
+    bridge._handle_message({"type": "fabrics", "fabrics": 0})
+    bridge._handle_message({"type": "pairing", "manual": "123", "qr": "MT:A"})
+    assert bridge.status()["qr"] == "MT:A"
+
+
 def test_handle_while_not_ready(caplog):
     asyncio.run(matter.MatterBridge(CONFIG, DEVICES).handle(CYCLE))
     assert "not ready, sensor data not passed" in caplog.text
@@ -330,3 +345,26 @@ def test_bridge_with_matter(fake_node, tmp_path):
 
     asyncio.run(run())
     assert [m["type"] for m in fake_node()] == ["init", "update", "stop"]
+
+
+def test_http_request(fake_node, tmp_path):
+    async def run():
+        bridge = Bridge(build_config({"sn": ["2930123456, office"], "emulation": True,
+                                      "port": 0, "matter": {"storage": str(tmp_path)}}))
+        task = asyncio.create_task(bridge.run())
+        try:
+            for _ in range(100):
+                await asyncio.sleep(0.05)
+                if bridge.web_server is not None and "qr" in bridge.matter.status():
+                    break
+            url = f"http://127.0.0.1:{bridge.web_server.port}/matter"
+            async with aiohttp.ClientSession() as session, session.get(url) as response:
+                return await response.json(), response.headers
+        finally:
+            bridge.stop()
+            await task
+
+    state, headers = asyncio.run(run())
+    assert state == {"paired": False, "controllers": 0, "manual": "1234-567-8901",
+                     "qr": "MT:Y.K9"}
+    assert "Access-Control-Allow-Origin" not in headers

@@ -22,7 +22,7 @@
 #header form input {
 	float:right;
 }
-#curent_data_section {
+#curent_data_section, #pairing_section {
 	float:left;
 	padding:10px;
 }
