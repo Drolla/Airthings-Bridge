@@ -17,7 +17,7 @@ from typing import Any
 
 from airthings_bridge import __version__
 from airthings_bridge.airthings import AirthingsDevice
-from airthings_bridge.config import MatterConfig
+from airthings_bridge.config import MATTER_VALUES, MatterConfig
 from airthings_bridge.errors import BridgeError
 from airthings_bridge.readings import Cycle
 
@@ -42,6 +42,11 @@ CONCENTRATIONS = (
     ("voc", "totalVolatileOrganicCompoundsConcentrationMeasurement", UNIT_PPM, 0.001),
 )
 
+# Google Home shows air quality, pressure, CO2 and VOC of an endpoint as a
+# group, and only the values that changed with the last report, the others as
+# unknown. Pressure, CO2 and VOC are therefore optional (MATTER_VALUES), so
+# that air quality is shown.
+
 # Air quality levels of the Airthings app: Values from which the air quality
 # is fair and poor
 AIR_QUALITY_LEVELS = {"radon": (100, 150), "co2": (800, 1000), "voc": (250, 2000)}
@@ -50,25 +55,30 @@ AIR_QUALITY_LEVELS = {"radon": (100, 150), "co2": (800, 1000), "voc": (250, 2000
 MAX_LABEL = 32
 
 
-def clusters(model: type[AirthingsDevice], radon_key: str) -> list[str]:
+def _exposed(key: str, optional: tuple[str, ...]) -> bool:
+    return key not in MATTER_VALUES or key in optional
+
+
+def clusters(model: type[AirthingsDevice], radon_key: str,
+             optional: tuple[str, ...] = ()) -> list[str]:
     """Return the Matter clusters of a device model (matter.js names)."""
     keys = model.value_keys()
     names = ["airQuality"]
     names += [cluster for key, cluster in (("temperature", "temperatureMeasurement"),
                                             ("humidity", "relativeHumidityMeasurement"),
                                             ("pressure", "pressureMeasurement"))
-              if key in keys]
+              if key in keys and _exposed(key, optional)]
     names += [cluster for key, cluster, _, _ in CONCENTRATIONS
-              if (radon_key if key == "radon" else key) in keys]
+              if (radon_key if key == "radon" else key) in keys and _exposed(key, optional)]
     if "battery" in keys:
         names.append("powerSource")
     return names
 
 
-def endpoint(serial: str, name: str, model: type[AirthingsDevice],
-             radon_key: str) -> dict[str, Any]:
+def endpoint(serial: str, name: str, model: type[AirthingsDevice], radon_key: str,
+             optional: tuple[str, ...] = ()) -> dict[str, Any]:
     """Return the endpoint of a device: ID, clusters and initial state."""
-    names = clusters(model, radon_key)
+    names = clusters(model, radon_key, optional)
     state: dict[str, Any] = {
         "bridgedDeviceBasicInformation": {
             "vendorName": "Airthings", "productName": model.PRODUCT_NAME[:MAX_LABEL],
@@ -102,10 +112,12 @@ def air_quality(values: dict[str, Any], radon_key: str) -> int:
     return max(levels)
 
 
-def cluster_state(values: dict[str, Any], radon_key: str) -> dict[str, Any]:
+def cluster_state(values: dict[str, Any], radon_key: str,
+                  optional: tuple[str, ...] = ()) -> dict[str, Any]:
     """Return the cluster states of the values of a reading (Matter units).
 
     Missing values aren't changed. Empty values mark the device unreachable.
+    The air quality includes the optional values that aren't exposed.
     """
     state: dict[str, Any] = {"bridgedDeviceBasicInformation": {"reachable": bool(values)}}
     if not values:
@@ -117,12 +129,12 @@ def cluster_state(values: dict[str, Any], radon_key: str) -> dict[str, Any]:
         state["temperatureMeasurement"] = {"measuredValue": round(values["temperature"] * 100)}
     if "humidity" in values:
         state["relativeHumidityMeasurement"] = {"measuredValue": round(values["humidity"] * 100)}
-    if "pressure" in values:
+    if "pressure" in values and _exposed("pressure", optional):
         # Unit 0.1 kPa, which is 1 hPa
         state["pressureMeasurement"] = {"measuredValue": round(values["pressure"])}
     for key, cluster, _, factor in CONCENTRATIONS:
         value = values.get(radon_key if key == "radon" else key)
-        if value is not None:
+        if value is not None and _exposed(key, optional):
             state[cluster] = {"measuredValue": value * factor}
     if "battery" in values:
         battery = values["battery"]
@@ -159,7 +171,7 @@ class MatterBridge:
         """Initialize the consumer with the devices (serial, name, model)."""
         self._config = config
         exposed = [d for d in devices if "*" in config.devices or d[1] in config.devices]
-        self._endpoints = [endpoint(serial, name, model, config.radon)
+        self._endpoints = [endpoint(serial, name, model, config.radon, config.values)
                            for serial, name, model in exposed]
         self._ids = {name: f"airthings-{serial}" for serial, name, _ in exposed}
         self._states: dict[str, dict[str, dict[str, Any]]] = {}  # Last states by endpoint
@@ -296,7 +308,9 @@ class MatterBridge:
         if process is None or not self._ready.is_set():
             logger.warning("Matter bridge process not ready, sensor data not passed")
             return
-        states = {self._ids[reading.device]: cluster_state(reading.values, self._config.radon)
+        config = self._config
+        states = {self._ids[reading.device]:
+                  cluster_state(reading.values, config.radon, config.values)
                   for reading in cycle.readings if reading.device in self._ids}
         for endpoint_id, state in states.items():
             last = self._states.setdefault(endpoint_id, {})

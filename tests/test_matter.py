@@ -24,38 +24,51 @@ VALUES = {"humidity": 59.0, "radon_st": 34, "radon_lt": 160, "temperature": 22.4
 CYCLE = Cycle(1000, (Reading("office", VALUES, 990), Reading("cellar", {})))
 
 
-@pytest.mark.parametrize("model, radon_key, expected", [
-    (WavePlus, "radon_st", ["airQuality", "temperatureMeasurement",
-                            "relativeHumidityMeasurement", "pressureMeasurement",
-                            "radonConcentrationMeasurement",
-                            "carbonDioxideConcentrationMeasurement",
-                            "totalVolatileOrganicCompoundsConcentrationMeasurement",
-                            "powerSource"]),
-    (WaveGen1, "radon_st", ["airQuality", "temperatureMeasurement",
-                            "relativeHumidityMeasurement", "radonConcentrationMeasurement"]),
-    (WaveGen1, "radon_year", ["airQuality", "temperatureMeasurement",
-                              "relativeHumidityMeasurement"]),
-    (CorentiumHome2, "radon_year", ["airQuality", "temperatureMeasurement",
-                                    "relativeHumidityMeasurement",
-                                    "radonConcentrationMeasurement", "powerSource"]),
-    (WaveMini, "radon_st", ["airQuality", "temperatureMeasurement",
-                            "relativeHumidityMeasurement", "pressureMeasurement",
-                            "totalVolatileOrganicCompoundsConcentrationMeasurement",
-                            "powerSource"]),
-    (WaveEnhance, "radon_st", ["airQuality", "temperatureMeasurement",
-                               "relativeHumidityMeasurement", "pressureMeasurement",
-                               "carbonDioxideConcentrationMeasurement",
-                               "totalVolatileOrganicCompoundsConcentrationMeasurement",
-                               "powerSource"]),
+ALL = ("pressure", "co2", "voc")
+
+
+@pytest.mark.parametrize("model, radon_key, optional, expected", [
+    (WavePlus, "radon_st", (), ["airQuality", "temperatureMeasurement",
+                                "relativeHumidityMeasurement", "radonConcentrationMeasurement",
+                                "powerSource"]),
+    (WavePlus, "radon_st", ALL, ["airQuality", "temperatureMeasurement",
+                                 "relativeHumidityMeasurement", "pressureMeasurement",
+                                 "radonConcentrationMeasurement",
+                                 "carbonDioxideConcentrationMeasurement",
+                                 "totalVolatileOrganicCompoundsConcentrationMeasurement",
+                                 "powerSource"]),
+    (WavePlus, "radon_st", ("co2",), ["airQuality", "temperatureMeasurement",
+                                      "relativeHumidityMeasurement",
+                                      "radonConcentrationMeasurement",
+                                      "carbonDioxideConcentrationMeasurement", "powerSource"]),
+    (WaveGen1, "radon_st", ALL, ["airQuality", "temperatureMeasurement",
+                                 "relativeHumidityMeasurement",
+                                 "radonConcentrationMeasurement"]),
+    (WaveGen1, "radon_year", (), ["airQuality", "temperatureMeasurement",
+                                  "relativeHumidityMeasurement"]),
+    (CorentiumHome2, "radon_year", (), ["airQuality", "temperatureMeasurement",
+                                        "relativeHumidityMeasurement",
+                                        "radonConcentrationMeasurement", "powerSource"]),
+    (WaveMini, "radon_st", (), ["airQuality", "temperatureMeasurement",
+                                "relativeHumidityMeasurement", "powerSource"]),
+    (WaveMini, "radon_st", ALL, ["airQuality", "temperatureMeasurement",
+                                 "relativeHumidityMeasurement", "pressureMeasurement",
+                                 "totalVolatileOrganicCompoundsConcentrationMeasurement",
+                                 "powerSource"]),
+    (WaveEnhance, "radon_st", ALL, ["airQuality", "temperatureMeasurement",
+                                    "relativeHumidityMeasurement", "pressureMeasurement",
+                                    "carbonDioxideConcentrationMeasurement",
+                                    "totalVolatileOrganicCompoundsConcentrationMeasurement",
+                                    "powerSource"]),
 ])
-def test_clusters(model, radon_key, expected):
-    assert matter.clusters(model, radon_key) == expected
+def test_clusters(model, radon_key, optional, expected):
+    assert matter.clusters(model, radon_key, optional) == expected
 
 
 def test_endpoint():
-    spec = matter.endpoint("2930123456", "a" * 40, WavePlus, "radon_st")
+    spec = matter.endpoint("2930123456", "a" * 40, WavePlus, "radon_st", ALL)
     assert spec["id"] == "airthings-2930123456"
-    assert spec["clusters"] == matter.clusters(WavePlus, "radon_st")
+    assert spec["clusters"] == matter.clusters(WavePlus, "radon_st", ALL)
     state = spec["state"]
     assert state["bridgedDeviceBasicInformation"] == {
         "vendorName": "Airthings", "productName": "Wave Plus", "nodeLabel": "a" * 32,
@@ -87,7 +100,7 @@ def test_air_quality(values, expected):
 
 
 def test_cluster_state():
-    assert matter.cluster_state(VALUES, "radon_st") == {
+    assert matter.cluster_state(VALUES, "radon_st", ALL) == {
         "bridgedDeviceBasicInformation": {"reachable": True},
         "airQuality": {"airQuality": 2},
         "temperatureMeasurement": {"measuredValue": 2248},
@@ -99,6 +112,14 @@ def test_cluster_state():
         "powerSource": {"batPercentRemaining": 170, "batChargeLevel": 0,
                         "batReplacementNeeded": False},
     }
+
+
+def test_cluster_state_without_optional_values():
+    state = matter.cluster_state(VALUES, "radon_st")
+    assert not {"pressureMeasurement", "carbonDioxideConcentrationMeasurement",
+                "totalVolatileOrganicCompoundsConcentrationMeasurement"} & set(state)
+    # CO2 (850 ppm) still lowers the air quality
+    assert state["airQuality"] == {"airQuality": 2}
 
 
 def test_cluster_state_radon_option():
@@ -277,7 +298,7 @@ def test_last_states():
     states = asyncio.run(run())
     office = states["airthings-2930123456"]
     assert office["temperatureMeasurement"] == {"measuredValue": 2000}
-    assert office["carbonDioxideConcentrationMeasurement"] == {"measuredValue": 850.0}
+    assert office["radonConcentrationMeasurement"] == {"measuredValue": 34}
     assert office["airQuality"] == {"airQuality": 2}
     assert states["airthings-2920123456"] == {
         "bridgedDeviceBasicInformation": {"reachable": False}}

@@ -120,6 +120,10 @@ mqtt:
 #     # Exposed radon value: radon_st, radon_week, radon_month, radon_lt or radon_year
 #     radon: radon_st
 #
+#     # Optional values: pressure, co2, voc. Google Home shows them, and the air
+#     # quality, as unknown if they don't change, see docs/matter.md#controllers
+#     values: [pressure, co2, voc]
+#
 #     # Matter UDP port
 #     port: 5540
 #

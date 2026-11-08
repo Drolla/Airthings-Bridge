@@ -76,6 +76,7 @@ def test_device_names():
     ({"sn": SN, "matter": {"port": 5540}}, "matter: 'storage'"),
     ({"sn": SN, "matter": {"storage": "m", "devices": ["cellar"]}}, "Unknown device"),
     ({"sn": SN, "matter": {"storage": "m", "radon": "co2"}}, "matter.radon"),
+    ({"sn": SN, "matter": {"storage": "m", "values": ["co2", "noise"]}}, "matter.values"),
     ({"sn": SN, "matter": {"storage": "m", "port": -1}}, "matter.port"),
     ({"sn": SN, "matter": {"storage": "m", "passcode": 12345678}}, "Invalid passcode"),
     ({"sn": SN, "matter": {"storage": "m", "passcode": "123"}}, "matter.passcode"),
@@ -90,10 +91,11 @@ def test_matter():
     assert build_config({"sn": SN, "matter": {"storage": "~/m"}}).matter == MatterConfig(
         storage=Path("~/m").expanduser())
     config = build_config({"sn": SN, "matter": {
-        "storage": "m", "devices": "office", "radon": "radon_lt", "port": 5541,
+        "storage": "m", "devices": "office", "radon": "radon_lt", "values": "co2", "port": 5541,
         "passcode": 20202021, "discriminator": 3840, "node": "/usr/bin/node"}})
-    assert config.matter == MatterConfig(Path("m"), ("office",), "radon_lt", 5541, 20202021, 3840,
-                                         "/usr/bin/node")
+    assert config.matter == MatterConfig(
+        Path("m"), devices=("office",), radon="radon_lt", values=("co2",), port=5541,
+        passcode=20202021, discriminator=3840, node="/usr/bin/node")
 
 
 def _alert(**changes):

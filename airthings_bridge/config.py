@@ -21,6 +21,7 @@ DEFAULT_RETRIES = 3
 DEFAULT_RETRY_DELAY = 1.0
 DEFAULT_DATA_RETENTION = 31 * 24 * 3600
 RADON_KEYS = ("radon_st", "radon_week", "radon_month", "radon_lt", "radon_year")
+MATTER_VALUES = ("pressure", "co2", "voc")  # Optional Matter values
 # Matter specification 5.1.7.1
 INVALID_PASSCODES = (0, 11111111, 22222222, 33333333, 44444444, 55555555, 66666666, 77777777,
                      88888888, 99999999, 12345678, 87654321)
@@ -92,6 +93,7 @@ class MatterConfig:
     storage: Path
     devices: tuple[str, ...] = ("*",)
     radon: str = "radon_st"  # Exposed radon value
+    values: tuple[str, ...] = ()  # Optional values (MATTER_VALUES)
     port: int = 5540
     passcode: int | None = None  # None: generated at the first start
     discriminator: int | None = None
@@ -366,6 +368,11 @@ def _matter(cfg: Any, device_names: set[str]) -> MatterConfig:
     if radon not in RADON_KEYS:
         raise ConfigError(f"matter.radon: One of {', '.join(RADON_KEYS)} expected, "
                           f"got '{radon}'")
+    values = tuple(str(value) for value in _as_list(cfg.get("values") or []))
+    for value in values:
+        if value not in MATTER_VALUES:
+            raise ConfigError(f"matter.values: One of {', '.join(MATTER_VALUES)} expected, "
+                              f"got '{value}'")
     passcode = _matter_int(cfg, "passcode", 99999998)
     if passcode in INVALID_PASSCODES:
         raise ConfigError(f"matter.passcode: Invalid passcode '{passcode}'")
@@ -373,6 +380,7 @@ def _matter(cfg: Any, device_names: set[str]) -> MatterConfig:
         storage=Path(cfg["storage"]).expanduser(),
         devices=devices,
         radon=radon,
+        values=values,
         port=_port(cfg.get("port", 5540), "matter.port") or 5540,
         passcode=passcode,
         discriminator=_matter_int(cfg, "discriminator", 4095),

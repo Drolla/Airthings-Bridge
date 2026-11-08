@@ -170,6 +170,7 @@ Node.js and matter.js, see [Matter](matter.md).
 | `storage`       | (required) | Directory of the Matter state (pairings, pairing code) |
 | `devices`       | `'*'`      | Exposed devices: device name, list of names, or `'*'` for all |
 | `radon`         | radon_st   | Exposed radon value: radon_st, radon_week, radon_month, radon_lt or radon_year |
+| `values`        | none       | Optional values: pressure, co2, voc (see [Controllers](matter.md#controllers)) |
 | `port`          | 5540       | Matter UDP port                                        |
 | `passcode`      | generated  | Pairing passcode (1 to 99999998)                       |
 | `discriminator` | generated  | Pairing discriminator (0 to 4095)                      |

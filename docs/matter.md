@@ -17,11 +17,15 @@ devices, so that the controllers get real values from the start.
 | Air quality           | Air Quality (good, fair, poor)          | all                             |
 | Temperature           | Temperature Measurement                 | all                             |
 | Humidity              | Relative Humidity Measurement           | all                             |
-| Pressure              | Pressure Measurement                    | Wave Plus, Wave Mini, Wave Enhance |
 | Radon (`radon`)       | Radon Concentration Measurement (Bq/m³) | Wave Plus, Wave Radon, Wave Gen 1, Corentium Home 2 |
-| CO2                   | Carbon Dioxide Concentration Measurement (ppm) | Wave Plus, Wave Enhance  |
-| VOC                   | TVOC Concentration Measurement (ppm)    | Wave Plus, Wave Mini, Wave Enhance |
 | Battery               | Power Source                            | all except Wave Gen 1           |
+| Pressure (optional)   | Pressure Measurement                    | Wave Plus, Wave Mini, Wave Enhance |
+| CO2 (optional)        | Carbon Dioxide Concentration Measurement (ppm) | Wave Plus, Wave Enhance  |
+| VOC (optional)        | TVOC Concentration Measurement (ppm)    | Wave Plus, Wave Mini, Wave Enhance |
+
+Pressure, CO2 and VOC are only exposed if they are selected by `values`, see
+[Controllers](#controllers). All values are on one Matter endpoint per
+device.
 
 A Matter sensor has a single radon value: the 1 day average `radon_st` by
 default, or the value selected by `radon`. The air quality is the worst
@@ -33,13 +37,33 @@ level of radon, CO2 and VOC, with the levels of the Airthings app:
 | CO2   | 800 ppm   | 1000 ppm  |
 | VOC   | 250 ppb   | 2000 ppb  |
 
-VOC is exposed in ppm (the devices measure ppb), as Google Home shows ppb
-values 1000 times too high. A device that couldn't be read is reported as
+The air quality includes CO2 and VOC also if they aren't exposed. VOC is
+exposed in ppm (the devices measure ppb), as Google Home shows ppb values
+1000 times too high. A device that couldn't be read is reported as
 unreachable. Noise and light aren't exposed.
 
-The controllers don't show all values: Home Assistant shows all of them,
-Apple Home and Google Home mainly the air quality, the temperature and the
-humidity. Radon is rarely shown.
+## Controllers
+
+The controllers don't show all values:
+
+* **Google Home** shows air quality, temperature, humidity, pressure, CO2,
+  VOC and battery, but not radon. It shows air quality, pressure, CO2 and VOC
+  of a device as a group: an update shows the values of the group that
+  changed, and the others as "Unknown". Matter reports only the changed
+  values, so the air quality, which rarely changes, would mostly be
+  "Unknown". Pressure, CO2 and VOC are therefore not exposed by default.
+* **Apple Home** shows the air quality, but not radon.
+* **Amazon Alexa** supports air quality, temperature, humidity and VOC, but
+  not radon, CO2 and pressure.
+* **Home Assistant** shows all values; select pressure, CO2 and VOC with
+  `values`.
+
+Radon is thus only shown through the air quality in Google Home, Apple Home
+and Alexa.
+
+Google Home keeps the values of a device that it got at the pairing. After a
+change of `values` (or of the bridge version, if it exposes other values),
+remove the bridge in Google Home and pair it again.
 
 ## Installation
 
@@ -81,9 +105,33 @@ See [Configuration](configuration.md#matter) for the other settings.
 ## Network
 
 The controllers find the bridge by mDNS (multicast UDP port 5353), and
-communicate with it over IPv6 (link-local addresses are enough) on UDP port
-5540. The Raspberry Pi has to be in the same network as the controller, or
-as its hub (e.g. Apple TV, HomePod, Google Nest).
+communicate with it over IPv6 (link-local addresses are enough, the router
+doesn't need IPv6) on UDP port 5540. The Raspberry Pi and the hub of the
+controller (e.g. Google Nest, Apple TV, HomePod) have to reach each other in
+the same network, in both directions.
+
+IPv6 has to be enabled on the Raspberry Pi. Check that the network interface
+has an IPv6 address (`fe80::...`) and that the bridge announces it:
+
+```
+ip -6 addr show wlan0
+avahi-resolve -6 -n $(avahi-browse -rpt _matter._tcp | grep "^=" | cut -d";" -f7 | head -1)
+```
+
+If `wlan0` has no IPv6 address, check `sysctl net.ipv6.conf.wlan0.disable_ipv6`
+(`1`: disabled) and the IPv6 setting of the network connection
+(`nmcli connection show`).
+
+If a controller shows the bridge as offline, check that the Raspberry Pi
+reaches its hub, with the link-local address of the hub (shown in the bridge
+log with the debug level, e.g. `fe80::22df:b9ff:fe29:fb89`):
+
+```
+ping -6 -c 3 fe80::22df:b9ff:fe29:fb89%wlan0
+```
+
+Wi-Fi repeaters and mesh systems may block the traffic between devices on
+different access points.
 
 ## Pairing
 
@@ -107,15 +155,17 @@ product ID 0x8000):
 
 * **Apple Home**: Add accessory, More options, enter the code. Confirm the
   warning about the uncertified accessory.
-* **Google Home**: Test vendor IDs are only accepted for a Matter integration
-  of the [Google Home Developer Console](https://console.home.google.com/)
-  with vendor ID 0xFFF1 and product ID 0x8000.
+* **Google Home**: Add device, Matter device, enter the code. If Google Home
+  refuses the uncertified device, create a Matter integration with vendor ID
+  0xFFF1 and product ID 0x8000 in the
+  [Google Home Developer Console](https://console.home.google.com/).
 * **Home Assistant**: Matter integration, add the device with the Home
   Assistant companion app.
 
-Further controllers are added with the pairing function of a paired
-controller (e.g. "Turn on pairing mode" in Apple Home), as the pairing code
-is no longer logged.
+Further controllers are added with a pairing code of a paired controller
+(e.g. "Linked Matter apps & services" in the device settings of Google
+Home, "Turn on pairing mode" in Apple Home), as the pairing code is no
+longer logged.
 
 ## Reset
 
