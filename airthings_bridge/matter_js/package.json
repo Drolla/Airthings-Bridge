@@ -1,0 +1,12 @@
+{
+  "name": "airthings-bridge-matter",
+  "private": true,
+  "description": "Matter bridge process of the Airthings Bridge",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "dependencies": {
+    "@matter/main": "0.18.0"
+  }
+}

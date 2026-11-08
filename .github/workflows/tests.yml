@@ -44,6 +44,31 @@ jobs:
       - name: mypy
         run: mypy
 
+  # Smoke test of the matter.js bridge process, skipped by the pytest job
+  matter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install package and matter.js
+        run: |
+          pip install -e ".[dev]"
+          cd airthings_bridge/matter_js
+          npm ci
+
+      - name: Run the Matter tests
+        run: pytest tests/test_matter.py tests/test_matter_node.py
+
   # The tests run against the source tree and can't detect packaging
   # mistakes, like missing web UI files in the wheel.
   wheel-install:

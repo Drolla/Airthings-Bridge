@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>Airthings Bridge - Matter pairing</title>
+	<script type="text/javascript" src="airthings_bridge.js"></script>
+	<script type="text/javascript" src="qrcode.min.js"></script>
+	<script>
+		window.addEventListener('load', function () {
+			var link = document.createElement('link');
+			link.rel = 'stylesheet';
+			link.type = 'text/css';
+			if (window.screen.width<800) {
+				link.href = 'airthings_bridge_mobile.css';
+				DisplayType="Mobile";
+			} else {
+				link.href = 'airthings_bridge.css';
+				DisplayType="Classic";
+			}
+			document.head.appendChild(link);
+			LoadMatterPairing("pairing");
+		}, false);
+	</script>
+</head>
+<body>
+	<div id="header"><h1>Airthings Bridge</h1></div>
+	<div id="pairing_section">
+		<h1>Matter pairing</h1>
+		<div id="pairing">
+		</div>
+		<p><a href="index.html">Back to the current data</a></p>
+	</div>
+	<div id="footer">Airthings Bridge</div>
+</body>
+</html>

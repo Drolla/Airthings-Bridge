@@ -23,7 +23,7 @@ from airthings_bridge.logging_setup import configure_logging
 
 logger = logging.getLogger(__name__)
 
-COMMANDS = ("run", "scan", "read", "test-mail", "test-mqtt")
+COMMANDS = ("run", "scan", "read", "test-mail", "test-mqtt", "matter-reset")
 
 
 def parse_arguments(argv: list[str]) -> argparse.Namespace:
@@ -33,8 +33,8 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(
         prog="airthings-bridge",
-        description="Bridge from Airthings BLE sensors to HTTP, CSV logging, mail alerts and "
-                    "MQTT. Without command, the bridge is run.")
+        description="Bridge from Airthings BLE sensors to HTTP, CSV logging, mail alerts, "
+                    "MQTT and Matter. Without command, the bridge is run.")
     parser.add_argument("--version", action="version", version=__version__)
     commands = parser.add_subparsers(dest="command", metavar="command")
 
@@ -87,17 +87,28 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
                     "broker of the configuration.")
     mqtt.add_argument("--config", required=True, help="YAML configuration file")
 
-    for command in (scan_cmd, read, mail, mqtt):
+    matter_reset = commands.add_parser(
+        "matter-reset", help="Remove the Matter pairings",
+        description="Remove all Matter pairings of the bridge, with its pairing code and "
+                    "identity. The bridge has to be stopped.")
+    matter_reset.add_argument("--config", required=True, help="YAML configuration file")
+    matter_reset.add_argument("--yes", action="store_true", help="Don't ask for confirmation")
+
+    for command in (scan_cmd, read, mail, mqtt, matter_reset):
         command.add_argument("-v", "--verbose", action="store_true",
                              help="Log debug information")
     return parser.parse_args(argv)
 
 
-def run(coro: Coroutine[Any, Any, Any]) -> Any:
-    """Run a coroutine in a new event loop and return its result."""
+def run(coro: Coroutine[Any, Any, Any], subprocesses: bool = False) -> Any:
+    """Run a coroutine in a new event loop and return its result.
+
+    subprocesses selects on Windows an event loop with subprocess support.
+    """
     # aiomqtt (paho-mqtt) requires add_reader(), which the default Windows
-    # event loop doesn't provide
-    loop_factory = asyncio.SelectorEventLoop if sys.platform == "win32" else None
+    # event loop doesn't provide. The selector event loop has no subprocesses.
+    selector = sys.platform == "win32" and not subprocesses
+    loop_factory = asyncio.SelectorEventLoop if selector else None
     with asyncio.Runner(loop_factory=loop_factory) as runner:
         return runner.run(coro)
 
@@ -116,7 +127,8 @@ def main(argv: list[str] | None = None) -> None:
         configure_logging(config.log, verbose=config.port is None, discovery=True)
         try:
             with contextlib.suppress(KeyboardInterrupt):
-                run(Bridge(config).run())
+                # Matter runs a process, which excludes MQTT on Windows
+                run(Bridge(config).run(), config.matter is not None and config.mqtt is None)
         except (BridgeError, OSError) as err:
             logger.critical("%s", err)
             logger.debug("Stack trace:", exc_info=True)
@@ -135,8 +147,10 @@ def main(argv: list[str] | None = None) -> None:
                 ok = run(_read(args.serials, args.period, args.retries))
             elif args.command == "test-mail":
                 ok = run(_test_mail(load_config(args.config), args.to, args.from_))
-            else:
+            elif args.command == "test-mqtt":
                 ok = run(_test_mqtt(load_config(args.config)))
+            else:
+                ok = _matter_reset(load_config(args.config), args.yes)
             if not ok:
                 sys.exit(1)
     except BridgeError as err:
@@ -214,4 +228,26 @@ async def _test_mqtt(config: Config) -> bool:
               file=sys.stderr)
         return False
     print(f"Test message published to {topic} ({config.mqtt.host}:{config.mqtt.port})")
+    return True
+
+
+def _matter_reset(config: Config, yes: bool) -> bool:
+    from airthings_bridge.consumers.matter import reset_storage
+
+    if config.matter is None:
+        raise ConfigError("No Matter bridge configured ('matter')")
+    storage = config.matter.storage
+    if not yes:
+        try:
+            answer = input(f"Remove all Matter pairings of the bridge ({storage})? [y/N] ")
+        except EOFError:
+            answer = ""
+        if answer.strip().lower() not in ("y", "yes"):
+            print("Nothing removed")
+            return False
+    if not reset_storage(storage):
+        print(f"No Matter state in {storage}")
+        return True
+    print("Matter pairings removed. Start the bridge, pair it again (new pairing code), and "
+          "remove the former bridge in the controllers.")
     return True

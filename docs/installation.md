@@ -64,6 +64,9 @@ sudo chmod 600 /opt/airthings_bridge/config.yaml
 sudo nano /opt/airthings_bridge/config.yaml
 ```
 
+To expose the devices to Matter controllers (Google Home, Apple Home, Home
+Assistant, ...), install also Node.js and matter.js, see [Matter](matter.md).
+
 Start the bridge for a first test, with the log written to the terminal.
 Only the service may open port 80, so the test uses port 8080:
 
@@ -108,6 +111,16 @@ sudo -u airthings_bridge -H bash -c '
   .venv/bin/pip install -e .
 '
 sudo systemctl start airthings_bridge
+```
+
+With [Matter](matter.md), also update matter.js, and restart the service:
+
+```
+sudo -u airthings_bridge -H bash -c '
+  cd /opt/airthings_bridge/airthings_bridge/matter_js
+  npm ci
+'
+sudo systemctl restart airthings_bridge
 ```
 
 ## Upgrade from version 1.x (Wave Plus Bridge)

@@ -8,6 +8,7 @@ from airthings_bridge.config import (
     DEFAULT_PERIOD,
     DeviceConfig,
     MailActionConfig,
+    MatterConfig,
     PrintActionConfig,
     build_config,
     load_config,
@@ -72,10 +73,29 @@ def test_device_names():
     ({"sn": SN, "mqtt": {"host": "h"}}, "mqtt.publish"),
     ({"sn": SN, "mqtt": {"host": "h", "publish": {"cellar": "*"}}}, "Unknown device"),
     ({"sn": SN, "mqtt": {"host": "h", "publish": {"*": "*"}, "auth": {}}}, "username"),
+    ({"sn": SN, "matter": {"port": 5540}}, "matter: 'storage'"),
+    ({"sn": SN, "matter": {"storage": "m", "devices": ["cellar"]}}, "Unknown device"),
+    ({"sn": SN, "matter": {"storage": "m", "radon": "co2"}}, "matter.radon"),
+    ({"sn": SN, "matter": {"storage": "m", "values": ["co2", "noise"]}}, "matter.values"),
+    ({"sn": SN, "matter": {"storage": "m", "port": -1}}, "matter.port"),
+    ({"sn": SN, "matter": {"storage": "m", "passcode": 12345678}}, "Invalid passcode"),
+    ({"sn": SN, "matter": {"storage": "m", "passcode": "123"}}, "matter.passcode"),
+    ({"sn": SN, "matter": {"storage": "m", "discriminator": 4096}}, "matter.discriminator"),
 ])
 def test_invalid_configurations(data, message):
     with pytest.raises(ConfigError, match=message):
         build_config(data)
+
+
+def test_matter():
+    assert build_config({"sn": SN, "matter": {"storage": "~/m"}}).matter == MatterConfig(
+        storage=Path("~/m").expanduser())
+    config = build_config({"sn": SN, "matter": {
+        "storage": "m", "devices": "office", "radon": "radon_lt", "values": "co2", "port": 5541,
+        "passcode": 20202021, "discriminator": 3840, "node": "/usr/bin/node"}})
+    assert config.matter == MatterConfig(
+        Path("m"), devices=("office",), radon="radon_lt", values=("co2",), port=5541,
+        passcode=20202021, discriminator=3840, node="/usr/bin/node")
 
 
 def _alert(**changes):

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "airthings-bridge"
 dynamic = ["version"]
-description = "Bridge from Airthings BLE sensors to HTTP, CSV logging, mail alerts and MQTT"
+description = "Bridge from Airthings BLE sensors to HTTP, CSV logging, mail alerts, MQTT and Matter"
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [{name = "Andreas Drollinger"}]
@@ -36,6 +36,7 @@ include = ["airthings_bridge*"]
 
 [tool.setuptools.package-data]
 "airthings_bridge.web" = ["static/*"]
+"airthings_bridge" = ["matter_js/*.mjs", "matter_js/package*.json"]
 
 [tool.ruff]
 target-version = "py311"

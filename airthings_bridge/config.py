@@ -20,6 +20,11 @@ DEFAULT_PERIOD = 120
 DEFAULT_RETRIES = 3
 DEFAULT_RETRY_DELAY = 1.0
 DEFAULT_DATA_RETENTION = 31 * 24 * 3600
+RADON_KEYS = ("radon_st", "radon_week", "radon_month", "radon_lt", "radon_year")
+MATTER_VALUES = ("pressure", "co2", "voc")  # Optional Matter values
+# Matter specification 5.1.7.1
+INVALID_PASSCODES = (0, 11111111, 22222222, 33333333, 44444444, 55555555, 66666666, 77777777,
+                     88888888, 99999999, 12345678, 87654321)
 
 
 @dataclass(frozen=True)
@@ -82,6 +87,20 @@ class MqttConfig:
 
 
 @dataclass(frozen=True)
+class MatterConfig:
+    """Matter bridge: state directory and exposed devices ('*' selects all)."""
+
+    storage: Path
+    devices: tuple[str, ...] = ("*",)
+    radon: str = "radon_st"  # Exposed radon value
+    values: tuple[str, ...] = ()  # Optional values (MATTER_VALUES)
+    port: int = 5540
+    passcode: int | None = None  # None: generated at the first start
+    discriminator: int | None = None
+    node: str = "node"  # Node.js executable
+
+
+@dataclass(frozen=True)
 class Config:
     """Airthings Bridge configuration."""
 
@@ -97,13 +116,15 @@ class Config:
     smtp: SmtpConfig | None = None
     alerts: tuple[AlertConfig, ...] = ()
     mqtt: MqttConfig | None = None
+    matter: MatterConfig | None = None
     emulation: bool = False
     developer: bool = False
     file: Path | None = field(default=None, compare=False)
 
 
 _KEYS = {"sn", "period", "retries", "retry_delay", "port", "csv", "data_retention",
-         "graph_decimations", "log", "smtp_server", "alerts", "mqtt", "emulation", "developer"}
+         "graph_decimations", "log", "smtp_server", "alerts", "mqtt", "matter", "emulation",
+         "developer"}
 
 
 def load_config(file: str | Path | None = None,
@@ -157,6 +178,7 @@ def build_config(data: dict[str, Any], file: Path | None = None) -> Config:
         smtp=smtp,
         alerts=alerts,
         mqtt=_mqtt(data["mqtt"], {d.name for d in devices}) if data.get("mqtt") else None,
+        matter=_matter(data["matter"], {d.name for d in devices}) if data.get("matter") else None,
         emulation=bool(data.get("emulation", False)),
         developer=bool(data.get("developer", False)),
         file=file,
@@ -333,3 +355,42 @@ def _mqtt(cfg: Any, device_names: set[str]) -> MqttConfig:
         tls=cfg.get("tls"),
         will=cfg.get("will"),
         topic=str(cfg.get("topic") or ""))
+
+
+def _matter(cfg: Any, device_names: set[str]) -> MatterConfig:
+    if not isinstance(cfg, dict) or not cfg.get("storage"):
+        raise ConfigError("matter: 'storage' is required")
+    devices = tuple(str(device) for device in _as_list(cfg.get("devices", "*")))
+    for device in devices:
+        if device != "*" and device not in device_names:
+            raise ConfigError(f"matter.devices: Unknown device '{device}'")
+    radon = str(cfg.get("radon", "radon_st"))
+    if radon not in RADON_KEYS:
+        raise ConfigError(f"matter.radon: One of {', '.join(RADON_KEYS)} expected, "
+                          f"got '{radon}'")
+    values = tuple(str(value) for value in _as_list(cfg.get("values") or []))
+    for value in values:
+        if value not in MATTER_VALUES:
+            raise ConfigError(f"matter.values: One of {', '.join(MATTER_VALUES)} expected, "
+                              f"got '{value}'")
+    passcode = _matter_int(cfg, "passcode", 99999998)
+    if passcode in INVALID_PASSCODES:
+        raise ConfigError(f"matter.passcode: Invalid passcode '{passcode}'")
+    return MatterConfig(
+        storage=Path(cfg["storage"]).expanduser(),
+        devices=devices,
+        radon=radon,
+        values=values,
+        port=_port(cfg.get("port", 5540), "matter.port") or 5540,
+        passcode=passcode,
+        discriminator=_matter_int(cfg, "discriminator", 4095),
+        node=str(cfg.get("node") or "node"))
+
+
+def _matter_int(cfg: dict[str, Any], key: str, maximum: int) -> int | None:
+    value = cfg.get(key)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= maximum:
+        raise ConfigError(f"matter.{key}: Integer 0..{maximum} expected, got '{value}'")
+    return value

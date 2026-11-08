@@ -2,7 +2,8 @@
 
 The bridge is configured by command line arguments, by a YAML file, or by
 both. Command line arguments take precedence over the YAML file. Mail alerts,
-MQTT publishing and custom logging can only be configured by the YAML file.
+MQTT publishing, Matter and custom logging can only be configured by the YAML
+file.
 The configuration is checked at the start; an error names the invalid key.
 
 ## Command line
@@ -54,6 +55,7 @@ settings. Overview:
 | `smtp_server`       | none       | SMTP server of the mail alerts                         |
 | `alerts`            | none       | Mail and print alerts                                  |
 | `mqtt`              | none       | MQTT broker and published data                         |
+| `matter`            | none       | Matter bridge                                          |
 | `emulation`         | False      | Emulated devices, for tests                            |
 | `developer`         | False      | Enables the `/eval` HTTP request                       |
 
@@ -158,6 +160,28 @@ The selected values are published, all retained, to the following topics:
 
 The bridge reconnects automatically if the connection to the broker is lost.
 
+### Matter
+
+The Matter bridge exposes the devices to Matter controllers. It requires
+Node.js and matter.js, see [Matter](matter.md).
+
+| Key             | Default    | Description                                            |
+|-----------------|------------|--------------------------------------------------------|
+| `storage`       | (required) | Directory of the Matter state (pairings, pairing code) |
+| `devices`       | `'*'`      | Exposed devices: device name, list of names, or `'*'` for all |
+| `radon`         | radon_st   | Exposed radon value: radon_st, radon_week, radon_month, radon_lt or radon_year |
+| `values`        | none       | Optional values: pressure, co2, voc (see [Controllers](matter.md#controllers)) |
+| `port`          | 5540       | Matter UDP port                                        |
+| `passcode`      | generated  | Pairing passcode (1 to 99999998)                       |
+| `discriminator` | generated  | Pairing discriminator (0 to 4095)                      |
+| `node`          | node       | Node.js executable                                     |
+
+```
+matter:
+    storage: /var/lib/airthings_bridge/matter
+    devices: [office, living]
+```
+
 ## HTTP requests
 
 | Request              | Response                                                           |
@@ -166,6 +190,7 @@ The bridge reconnects automatically if the connection to the broker is lost.
 | `/data`              | Current values of all devices (JSON)                               |
 | `/csv`               | Logged data (CSV), selected by glob patterns separated by `;` (`/csv?*:temp*;*:hum*`) or by a regular expression (`/csv?re=office:.*`) |
 | `/meta`              | Measurements and devices (JSON), used by the web UI                |
+| `/matter`            | Matter pairing state (JSON), if Matter is configured: `paired`, `controllers`, and the codes `manual` and `qr` while not paired |
 | `/eval?<expression>` | Developer mode only: result of a Python expression                 |
 
 `/data` response (times in seconds since epoch):
