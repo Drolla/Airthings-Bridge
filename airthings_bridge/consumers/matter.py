@@ -246,6 +246,9 @@ class MatterBridge:
             if match:
                 level = _LOG_LEVELS[match.group(1)]
                 text = match.group(2)
+                # A controller still uses its session of before a restart, harmless
+                if "Ignoring message for unknown session" in text:
+                    level = min(level, logging.INFO)
             if text:
                 logger.log(level, "%s", text)
 

@@ -317,6 +317,28 @@ def test_kill_at_stop(fake_node, monkeypatch, caplog):
     assert "didn't stop, killed" in caplog.text
 
 
+def test_log_levels(caplog):
+    caplog.set_level(logging.DEBUG, logger=matter.logger.name)
+
+    async def run():
+        reader = asyncio.StreamReader()
+        reader.feed_data(
+            b"2026-11-08 10:00:00.000 WARN     ExchangeManager  Ignoring message for unknown "
+            b"session\n"
+            b"2026-11-08 10:00:00.000 WARN     ServerNode  Something else\n"
+            b"2026-11-08 10:00:00.000 NOTICE   ServerNode  Online\n"
+            b"Console output\n")
+        reader.feed_eof()
+        await matter.MatterBridge(CONFIG, DEVICES)._read_stderr(reader)
+
+    asyncio.run(run())
+    assert [(r.levelname, r.getMessage()) for r in caplog.records] == [
+        ("INFO", "ExchangeManager  Ignoring message for unknown session"),
+        ("WARNING", "ServerNode  Something else"),
+        ("INFO", "ServerNode  Online"),
+        ("INFO", "Console output")]
+
+
 def test_status():
     bridge = matter.MatterBridge(CONFIG, DEVICES)
     assert bridge.status() == {"paired": False, "controllers": 0}

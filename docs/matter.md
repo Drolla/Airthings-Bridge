@@ -108,30 +108,42 @@ The controllers find the bridge by mDNS (multicast UDP port 5353), and
 communicate with it over IPv6 (link-local addresses are enough, the router
 doesn't need IPv6) on UDP port 5540. The Raspberry Pi and the hub of the
 controller (e.g. Google Nest, Apple TV, HomePod) have to reach each other in
-the same network, in both directions.
+the same network, in both directions. Wi-Fi repeaters, mesh access points
+and client isolation may block the traffic between devices.
 
-IPv6 has to be enabled on the Raspberry Pi. Check that the network interface
-has an IPv6 address (`fe80::...`) and that the bridge announces it:
+IPv6 has to be enabled on the Raspberry Pi. The network interface needs an
+IPv6 address (`fe80::...`):
 
 ```
 ip -6 addr show wlan0
-avahi-resolve -6 -n $(avahi-browse -rpt _matter._tcp | grep "^=" | cut -d";" -f7 | head -1)
 ```
 
-If `wlan0` has no IPv6 address, check `sysctl net.ipv6.conf.wlan0.disable_ipv6`
-(`1`: disabled) and the IPv6 setting of the network connection
-(`nmcli connection show`).
+If it has none, IPv6 is disabled (`sysctl net.ipv6.conf.wlan0.disable_ipv6`
+shows `1`). Enable it permanently where it was disabled:
 
-If a controller shows the bridge as offline, check that the Raspberry Pi
-reaches its hub, with the link-local address of the hub (shown in the bridge
-log with the debug level, e.g. `fe80::22df:b9ff:fe29:fb89`):
+* A line `net.ipv6.conf.….disable_ipv6 = 1` in /etc/sysctl.conf or
+  /etc/sysctl.d/*.conf: remove it, then run `sudo sysctl --system`.
+* The network connection (`nmcli -g ipv6.method connection show <name>`
+  shows `disabled`):
+
+  ```
+  sudo nmcli connection modify <name> ipv6.method auto
+  sudo nmcli connection up <name>
+  ```
+
+Restart the bridge afterwards, as matter.js reads the network addresses at
+its start. Check then that the bridge announces its IPv6 address:
+`avahi-browse` (package avahi-utils) shows the host name of the bridge,
+`avahi-resolve` its IPv6 address (`_matterc._udp` instead of `_matter._tcp`
+while the bridge isn't paired):
 
 ```
-ping -6 -c 3 fe80::22df:b9ff:fe29:fb89%wlan0
+avahi-browse -rt _matter._tcp
+avahi-resolve -6 -n DCA6321E9C410000.local
 ```
 
-Wi-Fi repeaters and mesh systems may block the traffic between devices on
-different access points.
+On Windows, the mDNS service of Windows conflicts with matter.js, and the
+controllers don't find the bridge. Run the bridge with Matter on Linux.
 
 ## Pairing
 
@@ -173,15 +185,111 @@ Further controllers are added with a pairing code of a paired controller
 Home, "Turn on pairing mode" in Apple Home), as the pairing code is no
 longer logged.
 
+## Troubleshooting
+
+### The controller doesn't find the bridge when pairing
+
+* The bridge announces itself for pairing only while it isn't paired (web UI:
+  "Matter: not paired"). Check the announcement with
+  `avahi-browse -rt _matterc._udp`.
+* Check IPv6 and the network, see [Network](#network). The phone and the hub
+  of the controller have to be in the same network as the Raspberry Pi.
+
+### The controller shows the bridge as offline
+
+* After a restart of the bridge, the hub of the controller reconnects within
+  a few minutes. The log shows `Reestablished 0 of 1 former subscriptions`
+  if the bridge couldn't resume the subscription of the hub itself.
+* IPv6 is disabled on the Raspberry Pi, see [Network](#network).
+* The Raspberry Pi doesn't reach the hub. Find the link-local address of the
+  hub, e.g. of a Google hub in the IPv6 lines of
+  `avahi-browse -rt _googlecast._tcp`, or in the debug log
+  (`Pairing request « udp://[fe80::…]`), and check that it answers:
+
+  ```
+  ping -6 -c 3 fe80::22df:b9ff:fe29:fb89%wlan0
+  ```
+
+  If neither this ping nor a ping of its IPv4 address is answered, the
+  network blocks the traffic between the devices.
+
+### Values are shown as "Unknown"
+
+* Google Home: pressure, CO2 or VOC are selected by `values`, see
+  [Controllers](#controllers).
+* Values that a device reports as invalid (e.g. radon during the first hours
+  after its start) aren't exposed.
+
+### Values are missing or outdated after a change of `values`
+
+Remove the bridge in the controller and pair it again, see
+[Controllers](#controllers).
+
+### The bridge stays paired after its removal in the controller
+
+The controller removes its pairing at the bridge, which then shows the
+pairing code again. Google Home did that only about two hours after the
+removal in the app; its hub stayed connected until then. Check the pairing
+state with the `/matter` request (see [Debugging](#debugging)). Wait, or
+reset the pairings, see [Reset](#reset).
+
 ## Reset
 
 To remove all pairings, stop the bridge, delete the storage directory, and
-start the bridge. It logs a new pairing code. Remove the bridge also in the
+start the bridge. It shows a new pairing code. Remove the bridge also in the
 controllers.
 
 ## Debugging
 
-The bridge logs the warnings and errors of the Matter process. More details
-are logged with the level INFO for the `airthings_bridge.consumers.matter`
-logger, and the matter.js information with the level DEBUG, see
-[Logging](debugging.md#logging).
+The `/matter` HTTP request shows the pairing state, and the number of paired
+controllers:
+
+```
+curl http://<Raspberry Pi address>/matter
+```
+
+```
+{"paired": true, "controllers": 1}
+```
+
+The bridge logs the warnings and errors of the Matter process. The level
+INFO for the `airthings_bridge.consumers.matter` logger adds the state of
+the Matter process (online, pairings), and DEBUG the debug messages of
+matter.js, including all messages exchanged with the controllers. The
+debug log grows fast; use it only for the analysis. Example of a log
+configuration (see [Logging](debugging.md#logging)):
+
+```
+log:
+    version: 1
+    formatters:
+      default:
+        format: '%(asctime)s - %(name)13s[%(levelname)7s] - %(message)s'
+        datefmt: '%Y-%m-%d %H:%M:%S'
+    handlers:
+      file:
+        level: DEBUG
+        formatter: default
+        class: logging.FileHandler
+        filename: /var/log/airthings_bridge/airthings_bridge.log
+        encoding: utf8
+        mode: a
+    root:
+      level: WARNING
+      handlers: [file]
+    loggers:
+      airthings_bridge.bridge:
+        level: INFO
+      airthings_bridge.consumers.matter:
+        level: DEBUG
+```
+
+Useful lines of the debug log:
+
+| Log line | Meaning |
+|----------|---------|
+| `Pairing request « udp://[fe80::…]:5540` | A controller connects, from the address of its hub |
+| `Subscribe successful` | The controller subscribed, it gets the values |
+| `ReportData`, then `StatusResponse` | Values sent, and acknowledged by the controller |
+| `Reestablished 0 of 1 former subscriptions` | After a restart, the bridge couldn't resume a subscription; the controller reconnects itself |
+| `removeFabric`, `pairings changed, 0 paired controller(s)` | A controller removed its pairing |
