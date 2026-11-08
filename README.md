@@ -1,6 +1,8 @@
 # Airthings Bridge to Wifi/LAN, MQTT and Matter
 
 [![Airthings](https://img.shields.io/badge/devices-Airthings-0072CE)](docs/devices.md)
+[![MQTT](https://img.shields.io/badge/interface-MQTT-660066?logo=mqtt)](docs/configuration.md#mqtt-publishing)
+[![Matter](https://img.shields.io/badge/interface-Matter-333333)](docs/matter.md)
 [![Python](https://img.shields.io/badge/python-%3E%3D3.11-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
