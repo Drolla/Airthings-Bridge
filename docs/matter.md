@@ -44,7 +44,10 @@ unreachable. Noise and light aren't exposed.
 
 ## Controllers
 
-The controllers don't show all values:
+The controllers don't show all values. The bridge has been tested with Google
+Home, the Open Home Foundation Matter Server (used by Home Assistant) and
+[PHC](https://github.com/Drolla/phc); the information about Apple Home and
+Alexa is from their documentation.
 
 * **Google Home** shows air quality, temperature, humidity, pressure, CO2,
   VOC and battery, but not radon. It shows air quality, pressure, CO2 and VOC
@@ -55,8 +58,8 @@ The controllers don't show all values:
 * **Apple Home** shows the air quality, but not radon.
 * **Amazon Alexa** supports air quality, temperature, humidity and VOC, but
   not radon, CO2 and pressure.
-* **Home Assistant** shows all values; select pressure, CO2 and VOC with
-  `values`.
+* **Home Assistant** and **PHC** show all values; select pressure, CO2 and
+  VOC with `values`.
 
 Radon is thus only shown through the air quality in Google Home, Apple Home
 and Alexa.
@@ -75,9 +78,9 @@ sudo apt install -y nodejs npm
 node --version
 ```
 
-If the version is too old (e.g. Node.js 18 of Raspberry Pi OS Bookworm),
-install a current version from [NodeSource](https://github.com/nodesource/distributions)
-instead.
+Raspberry Pi OS Trixie provides Node.js 20.19. If the version is too old
+(e.g. Node.js 18 of Raspberry Pi OS Bookworm), install a current version from
+[NodeSource](https://github.com/nodesource/distributions) instead.
 
 Install matter.js (about 120 MB) in the bridge installation, as user
 airthings_bridge:

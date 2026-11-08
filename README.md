@@ -10,8 +10,9 @@ forked from it for version 2.0.
 
 > 🟡 **Status:** tested with three Wave Plus devices running simultaneously.
 > The other [supported devices](docs/devices.md) have not been tested
-> physically. The Matter bridge has been tested with Google Home and emulated
-> devices.
+> physically. The Matter bridge has been tested with the three Wave Plus
+> devices, Google Home, the Open Home Foundation Matter Server and
+> [PHC](https://github.com/Drolla/phc).
 
 The Airthings Bridge connects one or multiple
 **Airthings** sensors to the **Wifi/LAN** network, using a **Raspberry Pi**

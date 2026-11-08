@@ -64,6 +64,9 @@ sudo chmod 600 /opt/airthings_bridge/config.yaml
 sudo nano /opt/airthings_bridge/config.yaml
 ```
 
+To expose the devices to Matter controllers (Google Home, Apple Home, Home
+Assistant, ...), install also Node.js and matter.js, see [Matter](matter.md).
+
 Start the bridge for a first test, with the log written to the terminal.
 Only the service may open port 80, so the test uses port 8080:
 
