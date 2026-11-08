@@ -1,5 +1,6 @@
 """Tests for the command line interface."""
 
+import os
 from unittest import mock
 
 import aiomqtt
@@ -108,3 +109,51 @@ def test_test_mqtt_failure(config_file, capsys):
             pytest.raises(SystemExit):
         cli.main(["test-mqtt", "--config", config_file])
     assert "refused" in capsys.readouterr().err
+
+
+@pytest.fixture
+def matter_storage(tmp_path):
+    storage = tmp_path / "matter"
+    (storage / "airthings-bridge").mkdir(parents=True)
+    (storage / "airthings-bridge" / "root.__number__").write_text("0")
+    (storage / "bridge").mkdir()
+    (storage / "bridge" / "pairing.passcode").write_text("20202021")
+    config = tmp_path / "config.yaml"
+    config.write_text(f"sn: 2930123456\nmatter: {{storage: '{storage.as_posix()}'}}\n",
+                      encoding="utf-8")
+    return storage, str(config)
+
+
+def test_matter_reset(matter_storage, capsys):
+    storage, config = matter_storage
+    # Lock of a process that ended
+    (storage / "airthings-bridge" / "matter.pid").write_text("999999999 token")
+    cli.main(["matter-reset", "--config", config, "--yes"])
+    assert storage.is_dir() and not list(storage.iterdir())
+    assert "Matter pairings removed" in capsys.readouterr().out
+    cli.main(["matter-reset", "--config", config, "--yes"])
+    assert "No Matter state" in capsys.readouterr().out
+
+
+def test_matter_reset_confirmation(matter_storage, monkeypatch):
+    storage, config = matter_storage
+    monkeypatch.setattr("builtins.input", lambda prompt: "n")
+    with pytest.raises(SystemExit):
+        cli.main(["matter-reset", "--config", config])
+    assert (storage / "bridge" / "pairing.passcode").exists()
+    monkeypatch.setattr("builtins.input", lambda prompt: "y")
+    cli.main(["matter-reset", "--config", config])
+    assert not list(storage.iterdir())
+
+
+def test_matter_reset_while_running(matter_storage):
+    storage, config = matter_storage
+    (storage / "airthings-bridge" / "matter.pid").write_text(f"{os.getpid()} token")
+    with pytest.raises(SystemExit, match="Stop the bridge first"):
+        cli.main(["matter-reset", "--config", config, "--yes"])
+    assert (storage / "bridge" / "pairing.passcode").exists()
+
+
+def test_matter_reset_without_matter(config_file):
+    with pytest.raises(SystemExit, match="No Matter bridge configured"):
+        cli.main(["matter-reset", "--config", config_file, "--yes"])

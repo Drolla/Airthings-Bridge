@@ -10,7 +10,10 @@ import contextlib
 import hashlib
 import json
 import logging
+import os
 import re
+import shutil
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +55,50 @@ AIR_QUALITY_LEVELS = {"radon": (100, 150), "co2": (800, 1000), "voc": (250, 2000
 
 # Matter limits the length of the basic information strings
 MAX_LABEL = 32
+
+
+def _process_exists(pid: int) -> bool:
+    if sys.platform == "win32":
+        # os.kill(pid, 0) would send CTRL_C_EVENT on Windows
+        import ctypes
+        kernel32 = ctypes.WinDLL("kernel32")
+        handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return False
+        kernel32.CloseHandle(handle)
+        return True
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def reset_storage(storage: Path) -> list[Path]:
+    """Delete the Matter state (pairings, pairing code, identity) and return the deleted paths.
+
+    Raises BridgeError if the bridge uses the storage. The storage directory is kept.
+    """
+    if not storage.is_dir():
+        return []
+    entries = sorted(storage.iterdir())
+    # matter.js locks a storage with matter.pid, containing the PID and a token
+    for pid_file in storage.glob("*/matter.pid"):
+        try:
+            pid = int(pid_file.read_text(encoding="utf-8").split()[0])
+        except (OSError, ValueError, IndexError):
+            continue
+        if _process_exists(pid):
+            raise BridgeError(f"The Matter storage is in use by process {pid}: Stop the bridge "
+                              "first")
+    for entry in entries:
+        if entry.is_dir() and not entry.is_symlink():
+            shutil.rmtree(entry)
+        else:
+            entry.unlink()
+    return entries
 
 
 def _exposed(key: str, optional: tuple[str, ...]) -> bool:

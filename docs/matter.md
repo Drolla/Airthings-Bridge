@@ -235,8 +235,18 @@ reset the pairings, see [Reset](#reset).
 
 ## Reset
 
-To remove all pairings, stop the bridge, delete the storage directory, and
-start the bridge. It shows a new pairing code. Remove the bridge also in the
+The `matter-reset` command removes all pairings of the bridge, with its
+pairing code and its identity (the controllers see a new device). The bridge
+has to be stopped:
+
+```
+sudo systemctl stop airthings_bridge
+sudo -u airthings_bridge /opt/airthings_bridge/.venv/bin/airthings-bridge matter-reset --config /opt/airthings_bridge/config.yaml
+sudo systemctl start airthings_bridge
+```
+
+The bridge then shows a new pairing code (unless `passcode` and
+`discriminator` are configured). Remove the former bridge also in the
 controllers.
 
 ## Debugging

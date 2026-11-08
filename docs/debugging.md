@@ -57,6 +57,16 @@ airthings-bridge test-mqtt --config /opt/airthings_bridge/config.yaml -v
 
 A generic MQTT client (e.g. MQTT Explorer) shows the published messages.
 
+## Matter
+
+Check the Matter pairing state with the `/matter` HTTP request, and remove
+all Matter pairings with the `matter-reset` command (with the bridge
+stopped), see [Matter](matter.md#troubleshooting):
+
+```
+airthings-bridge matter-reset --config /opt/airthings_bridge/config.yaml
+```
+
 ## Minimal configuration
 
 Run the bridge with only the serial numbers. Without HTTP port, the bridge

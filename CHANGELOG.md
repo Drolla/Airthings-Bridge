@@ -23,7 +23,8 @@ The Wave Plus Bridge becomes the Airthings Bridge.
 - Documentation in [docs/](docs), tests, and continuous integration.
 - Matter bridge, exposing the devices as Matter air quality sensors (with
   matter.js), see [Matter](docs/matter.md). The web UI shows the Matter
-  status and, while the bridge isn't paired, a pairing page.
+  status and, while the bridge isn't paired, a pairing page. The
+  `matter-reset` command removes the pairings.
 
 ### Changed
 
