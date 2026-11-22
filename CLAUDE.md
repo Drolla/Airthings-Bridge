@@ -47,3 +47,15 @@ python -m pytest
 ```
 
 Keep the documentation in `docs/` and `CHANGELOG.md` up to date.
+
+## Releases
+
+A release is made by pushing a tag `vX.Y.Z` on `main`; the
+`.github/workflows/release.yml` workflow then runs the tests and publishes
+the GitHub release. Before tagging:
+
+- Set the version in `airthings_bridge/__init__.py`; the tag must match it.
+- Date the `## [X.Y.Z]` section of `CHANGELOG.md`; its text is the release
+  notes.
+- Merge the release topic branch into `main` and check the CI of the commit.
+- Tag the merge commit with `git tag -a vX.Y.Z -m "Airthings Bridge X.Y.Z"`.

@@ -12,8 +12,9 @@ forked from it for version 2.0.
 
 > 🟡 **Status:** tested with three Wave Plus devices running simultaneously.
 > The other [supported devices](docs/devices.md) have not been tested
-> physically. The Matter bridge has been tested with the three Wave Plus
-> devices, Google Home, the Open Home Foundation Matter Server and
+> physically. The MQTT publishing has been tested with a Mosquitto broker.
+> The Matter bridge has been tested with the three Wave Plus devices, Google
+> Home, the Open Home Foundation Matter Server and
 > [PHC](https://github.com/Drolla/phc).
 
 The Airthings Bridge connects one or multiple
