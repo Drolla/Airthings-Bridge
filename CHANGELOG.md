@@ -3,7 +3,7 @@
 All notable changes are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [2.0.0] - unreleased
+## [2.0.0] - 2026-11-22
 
 The Wave Plus Bridge becomes the Airthings Bridge.
 
